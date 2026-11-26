@@ -6,6 +6,7 @@ import { useRoute } from "./lib/router";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { StudioPage } from "./pages/StudioPage";
 
 export default function App() {
   const route = useRoute();
@@ -19,6 +20,9 @@ export default function App() {
         {route.name === "projects" && <ProjectsPage />}
         {route.name === "project" && (
           <ProjectDetailPage projectId={route.id} maxUploadMb={info.data?.max_upload_mb ?? 2048} />
+        )}
+        {route.name === "studio" && (
+          <StudioPage projectId={route.id} maxUploadMb={info.data?.max_upload_mb ?? 2048} />
         )}
       </Layout>
     </ErrorBoundary>

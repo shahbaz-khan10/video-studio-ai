@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { NewProjectDialog } from "../components/NewProjectDialog";
-import { EmptyState, ErrorState, LoadingState, StatusBadge } from "../components/States";
+import { ProjectProgress } from "../components/ProjectProgress";
+import { ProjectThumb } from "../components/ProjectThumb";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { useAsync } from "../hooks/useAsync";
 import { api } from "../lib/api";
 import { formatDate } from "../lib/format";
@@ -60,8 +62,8 @@ export function ProjectsPage() {
           {projects.data?.map((project) => (
             <article className="project-card" key={project.id}>
               <div className="project-card-top">
-                <span className="project-icon" aria-hidden="true">▶</span>
-                <StatusBadge value={project.latest_job_status ?? project.status} />
+                <ProjectThumb projectId={project.id} compact />
+                <span className="project-card-label">Source preview</span>
               </div>
               <h3>
                 <a href={`#/projects/${project.id}`}>{project.name}</a>
@@ -74,12 +76,14 @@ export function ProjectsPage() {
                   </span>
                 ))}
               </div>
+              <ProjectProgress projectId={project.id} fallbackStatus={project.latest_job_status ?? project.status} />
               <div className="project-card-foot">
                 <span>{project.video_count} video{project.video_count === 1 ? "" : "s"}</span>
                 <span>{formatDate(project.updated_at)}</span>
               </div>
               <div className="project-card-actions">
                 <a className="button button-quiet" href={`#/projects/${project.id}`}>Open</a>
+                <a className="button button-quiet" href={`#/projects/${project.id}/studio`}>Studio</a>
                 <button className="button button-danger" type="button" onClick={() => remove(project.id, project.name)}>
                   Delete
                 </button>

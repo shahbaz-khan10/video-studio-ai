@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -32,6 +33,18 @@ def _client_metadata(duration_ms: int | None, width: int | None, height: int | N
         "width": _clean_int(width, 16384),
         "height": _clean_int(height, 16384),
     }
+
+
+def _reject_duplicate(db: Session, project_id: str, checksum: str, size_bytes: int) -> None:
+    existing = db.scalar(
+        select(Video.id).where(
+            Video.project_id == project_id,
+            Video.checksum_sha256 == checksum,
+            Video.size_bytes == size_bytes,
+        )
+    )
+    if existing:
+        raise AppError(409, "DUPLICATE_VIDEO", "This video has already been uploaded to the project.")
 
 
 def _attach_video(
@@ -136,6 +149,8 @@ async def upload_video(
                 digest.update(chunk)
         validate_video_file(head, file.content_type, total)
 
+        checksum = digest.hexdigest()
+        _reject_duplicate(db, project_id, checksum, total)
         suffix = Path(file.filename or "video.mp4").suffix or ".mp4"
         storage_key = storage.video_key(project_id, suffix)
         storage.save(storage_key, temp_path)
@@ -147,7 +162,7 @@ async def upload_video(
             file.content_type or "video/mp4",
             storage_key,
             total,
-            digest.hexdigest(),
+            checksum,
             _client_metadata(duration_ms, width, height),
         )
     finally:
@@ -270,6 +285,8 @@ def complete_upload_session(
         with temp_path.open("rb") as handle:
             validate_video_file(handle.read(64), session.content_type, total)
 
+        checksum = digest.hexdigest()
+        _reject_duplicate(db, session.project_id, checksum, total)
         suffix = Path(session.filename).suffix or ".mp4"
         storage_key = storage.video_key(session.project_id, suffix)
         storage.save(storage_key, temp_path)
@@ -281,7 +298,7 @@ def complete_upload_session(
             session.content_type,
             storage_key,
             total,
-            digest.hexdigest(),
+            checksum,
             session.client_metadata or {},
         )
         db.delete(session)

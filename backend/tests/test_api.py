@@ -1,4 +1,8 @@
+import pytest
+
 VIDEO_BYTES = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00video-bytes-for-tests"
+MOV_BYTES = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x00quicktime-bytes"
+MKV_BYTES = b"\x1a\x45\xdf\xa3\x01\x00\x00\x00\x00\x00\x00\x01matroska-bytes"
 
 
 def project_payload(name="Launch film"):
@@ -33,6 +37,8 @@ def test_health_and_info(client):
     assert body["capabilities"]["resumable_upload"] is True
     assert body["capabilities"]["frame_index"] is True
     assert body["capabilities"]["thumbnails"] is True
+    assert body["capabilities"]["job_cancellation"] is True
+    assert body["capabilities"]["job_retry"] is True
 
 
 def test_project_crud(client):
@@ -98,6 +104,33 @@ def test_upload_validation(client):
         files={"file": ("sample.mp4", VIDEO_BYTES, "video/mp4")},
     )
     assert missing_project.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "payload"),
+    [
+        ("clip.mov", "video/quicktime", MOV_BYTES),
+        ("clip.mkv", "video/x-matroska", MKV_BYTES),
+    ],
+)
+def test_supported_container_uploads(client, filename, content_type, payload):
+    project = create_project(client, name=f"Container {filename}")
+    response = client.post(
+        f"/api/v1/uploads/projects/{project['id']}/videos",
+        files={"file": (filename, payload, content_type)},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["video"]["original_filename"] == filename
+
+
+def test_duplicate_upload_is_rejected(client):
+    project = create_project(client, name="Duplicate film")
+    endpoint = f"/api/v1/uploads/projects/{project['id']}/videos"
+    first = client.post(endpoint, files={"file": ("clip.mp4", VIDEO_BYTES, "video/mp4")})
+    assert first.status_code == 201, first.text
+    second = client.post(endpoint, files={"file": ("clip-copy.mp4", VIDEO_BYTES, "video/mp4")})
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "DUPLICATE_VIDEO"
 
 
 def test_upload_metadata_stream_and_cleanup(client):

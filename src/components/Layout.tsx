@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useRoute } from "../lib/router";
 import type { ServerInfo } from "../types";
 
 interface LayoutProps {
@@ -8,6 +9,9 @@ interface LayoutProps {
 }
 
 export function Layout({ children, info, databaseStatus }: LayoutProps) {
+  const route = useRoute();
+  const activeNav = route.name === "dashboard" ? "dashboard" : "projects";
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -21,8 +25,8 @@ export function Layout({ children, info, databaseStatus }: LayoutProps) {
           </div>
         </div>
         <nav className="nav" aria-label="Main navigation">
-          <a href="#/dashboard">Overview</a>
-          <a href="#/projects">Projects</a>
+          <a href="#/dashboard" aria-current={activeNav === "dashboard" ? "page" : undefined}>Overview</a>
+          <a href="#/projects" aria-current={activeNav === "projects" ? "page" : undefined}>Projects</a>
         </nav>
         <div className="sidebar-note">
           <span className="dot" />

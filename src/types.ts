@@ -29,6 +29,10 @@ export interface Video {
   bit_rate: number | null;
   video_codec: string | null;
   audio_codec: string | null;
+  audio_stream_count: number;
+  subtitle_streams: Record<string, unknown>[];
+  aspect_ratio: string | null;
+  stream_validation: Record<string, unknown>;
   stream_layout: Record<string, unknown>[];
   probe_status: string;
   probe_source: string | null;

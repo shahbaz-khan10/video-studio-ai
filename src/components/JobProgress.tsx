@@ -6,13 +6,16 @@ import { LoadingState } from "./States";
 interface JobProgressProps {
   jobId: string;
   onSettled: () => void;
+  onJobChange?: (jobId: string) => void;
 }
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
-export function JobProgress({ jobId, onSettled }: JobProgressProps) {
+export function JobProgress({ jobId, onSettled, onJobChange }: JobProgressProps) {
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
   const settled = useRef(false);
 
   useEffect(() => {
@@ -52,6 +55,37 @@ export function JobProgress({ jobId, onSettled }: JobProgressProps) {
     };
   }, [jobId, onSettled]);
 
+  const cancel = async () => {
+    if (acting) return;
+    setActing(true);
+    try {
+      const result = await api.cancelJob(jobId);
+      setJob(result);
+      setActionError(null);
+      onSettled();
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "Could not cancel the job.");
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const retry = async () => {
+    if (acting) return;
+    setActing(true);
+    try {
+      const result = await api.retryJob(jobId);
+      setJob(result);
+      setActionError(null);
+      onJobChange?.(result.id);
+      onSettled();
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "Could not retry the job.");
+    } finally {
+      setActing(false);
+    }
+  };
+
   if (!job && !error) return <LoadingState label="Reading processing status…" />;
   if (error) return <p className="form-error" role="alert">{error}</p>;
   if (!job) return null;
@@ -81,7 +115,22 @@ export function JobProgress({ jobId, onSettled }: JobProgressProps) {
           </li>
         ))}
       </ol>
+      {(job.status === "queued" || job.status === "running") && (
+        <div className="job-actions">
+          <button className="button button-quiet" type="button" onClick={cancel} disabled={acting}>
+            {acting ? "Cancelling…" : "Cancel job"}
+          </button>
+        </div>
+      )}
+      {(job.status === "failed" || job.status === "cancelled") && (
+        <div className="job-actions">
+          <button className="button button-primary" type="button" onClick={retry} disabled={acting}>
+            {acting ? "Retrying…" : "Retry job"}
+          </button>
+        </div>
+      )}
       {job.error_message && <p className="form-error" role="alert">{job.error_message}</p>}
+      {actionError && <p className="form-error" role="alert">{actionError}</p>}
     </div>
   );
 }

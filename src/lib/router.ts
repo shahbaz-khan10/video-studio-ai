@@ -3,12 +3,17 @@ import { useEffect, useState } from "react";
 export type Route =
   | { name: "dashboard" }
   | { name: "projects" }
-  | { name: "project"; id: string };
+  | { name: "project"; id: string }
+  | { name: "studio"; id: string };
 
 export function parseRoute(hash: string): Route {
-  const clean = hash.replace(/^#\/?/, "");
+  const clean = hash.replace(/^#\/?/, "").replace(/\/$/, "");
   if (clean.startsWith("projects/")) {
-    return { name: "project", id: decodeURIComponent(clean.slice("projects/".length)) };
+    const rest = decodeURIComponent(clean.slice("projects/".length));
+    if (rest.endsWith("/studio")) {
+      return { name: "studio", id: rest.slice(0, -"/studio".length) };
+    }
+    return { name: "project", id: rest };
   }
   if (clean === "projects") {
     return { name: "projects" };

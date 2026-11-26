@@ -68,6 +68,12 @@ export const api = {
   deleteProject: (id: string) =>
     request<void>(`/api/v1/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   getJob: (id: string) => request<Job>(`/api/v1/jobs/${encodeURIComponent(id)}`),
+  cancelJob: (id: string) =>
+    request<Job>(`/api/v1/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+  retryJob: (id: string) =>
+    request<Job>(`/api/v1/jobs/${encodeURIComponent(id)}/retry`, { method: "POST" }),
+  cancelUploadSession: (id: string) =>
+    request<void>(`/api/v1/uploads/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   deleteVideo: (id: string) =>
     request<void>(`/api/v1/videos/${encodeURIComponent(id)}`, { method: "DELETE" }),
   listVideoAssets: (videoId: string, kind?: string) =>
@@ -117,9 +123,19 @@ function uploadChunk(
   index: number,
   chunk: Blob,
   onProgress: (percent: number) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    const cleanup = () => signal?.removeEventListener("abort", abort);
+    const abort = () => xhr.abort();
+    if (signal) {
+      if (signal.aborted) {
+        reject(new DOMException("Upload cancelled", "AbortError"));
+        return;
+      }
+      signal.addEventListener("abort", abort, { once: true });
+    }
     xhr.open("PUT", `${API_BASE}/api/v1/uploads/sessions/${encodeURIComponent(sessionId)}/chunks/${index}`);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.upload.onprogress = (event) => {
@@ -127,7 +143,12 @@ function uploadChunk(
         onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
       }
     };
+    xhr.onabort = () => {
+      cleanup();
+      reject(new DOMException("Upload cancelled", "AbortError"));
+    };
     xhr.onload = () => {
+      cleanup();
       if (xhr.status >= 200 && xhr.status < 300) {
         onProgress(100);
         resolve();
@@ -141,9 +162,17 @@ function uploadChunk(
       }
       reject(new ApiError(body?.error?.message ?? `Chunk ${index} failed`, body?.error?.code ?? "CHUNK_FAILED", xhr.status));
     };
-    xhr.onerror = () => reject(new ApiError("Network error during upload", "NETWORK_ERROR", 0));
+    xhr.onerror = () => {
+      cleanup();
+      reject(new ApiError("Network error during upload", "NETWORK_ERROR", 0));
+    };
     xhr.send(chunk);
   });
+}
+
+export interface UploadOptions {
+  signal?: AbortSignal;
+  onSession?: (sessionId: string) => void;
 }
 
 export async function uploadVideo(
@@ -151,6 +180,7 @@ export async function uploadVideo(
   file: File,
   metadata: VideoMetadata,
   onProgress: (percent: number) => void,
+  options: UploadOptions = {},
 ): Promise<UploadAccepted> {
   const mimeType = resolveVideoMimeType(file.name, file.type);
   if (!mimeType) {
@@ -166,16 +196,24 @@ export async function uploadVideo(
     `/api/v1/uploads/projects/${encodeURIComponent(projectId)}/sessions`,
     { method: "POST", body: JSON.stringify(payload) },
   );
+  options.onSession?.(session.id);
 
   try {
     for (let index = 0; index < session.total_chunks; index += 1) {
+      if (options.signal?.aborted) throw new DOMException("Upload cancelled", "AbortError");
       const start = index * session.chunk_size;
       const end = Math.min(start + session.chunk_size, file.size);
-      await uploadChunk(session.id, index, file.slice(start, end), (chunkPercent) => {
-        const span = 98 / session.total_chunks;
-        const base = (index / session.total_chunks) * 98;
-        onProgress(Math.min(99, Math.round(base + (chunkPercent / 100) * span)));
-      });
+      await uploadChunk(
+        session.id,
+        index,
+        file.slice(start, end),
+        (chunkPercent) => {
+          const span = 98 / session.total_chunks;
+          const base = (index / session.total_chunks) * 98;
+          onProgress(Math.min(99, Math.round(base + (chunkPercent / 100) * span)));
+        },
+        options.signal,
+      );
     }
     const result = await request<UploadAccepted>(
       `/api/v1/uploads/sessions/${encodeURIComponent(session.id)}/complete`,
@@ -184,9 +222,11 @@ export async function uploadVideo(
     onProgress(100);
     return result;
   } catch (error) {
-    try {
-      await request<void>(`/api/v1/uploads/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
-    } catch {}
+    if (!options.signal?.aborted) {
+      try {
+        await request<void>(`/api/v1/uploads/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
+      } catch {}
+    }
     throw error;
   }
 }

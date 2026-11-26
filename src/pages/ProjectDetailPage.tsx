@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { JobProgress } from "../components/JobProgress";
 import { UploadPanel } from "../components/UploadPanel";
 import { VideoCard } from "../components/VideoCard";
+import { VideoWorkspace } from "../components/VideoWorkspace";
 import { EmptyState, ErrorState, LoadingState, StatusBadge } from "../components/States";
 import { useAsync } from "../hooks/useAsync";
 import { api } from "../lib/api";
@@ -14,6 +15,7 @@ interface ProjectDetailPageProps {
 
 export function ProjectDetailPage({ projectId, maxUploadMb }: ProjectDetailPageProps) {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const project = useAsync(() => api.getProject(projectId), [projectId]);
   const jobs = useAsync(() => api.listProjectJobs(projectId), [projectId]);
@@ -47,12 +49,22 @@ export function ProjectDetailPage({ projectId, maxUploadMb }: ProjectDetailPageP
     [jobs.reload],
   );
 
-  if (project.loading) return <LoadingState label="Loading project…" />;
-  if (project.error) return <ErrorState message={project.error} onRetry={project.reload} />;
+  const onJobChanged = useCallback(
+    (jobId: string) => {
+      setActiveJobId(jobId);
+      jobs.reload();
+    },
+    [jobs.reload],
+  );
+
+  if (!project.data && project.loading) return <LoadingState label="Loading project…" />;
+  if (!project.data && project.error) return <ErrorState message={project.error} onRetry={project.reload} />;
   if (!project.data) return <EmptyState title="Project not found" message="Select another project from the list." />;
 
   const current = project.data;
   const jobId = activeJobId ?? jobs.data?.[0]?.id ?? null;
+  const selectedVideo = current.videos.find((item) => item.id === selectedVideoId) ?? current.videos[0] ?? null;
+  const selectedJob = jobs.data?.find((item) => item.video_id === selectedVideo?.id) ?? null;
 
   return (
     <div className="page">
@@ -71,8 +83,19 @@ export function ProjectDetailPage({ projectId, maxUploadMb }: ProjectDetailPageP
           <StatusBadge value={current.status} />
           <span>Source: {current.source_language.toUpperCase()}</span>
           <span>Targets: {current.target_languages.join(", ").toUpperCase()}</span>
+          <a className="button button-quiet" href={`#/projects/${projectId}/studio`}>
+            Studio layout
+          </a>
         </div>
       </section>
+
+      <VideoWorkspace
+        project={current}
+        videos={current.videos}
+        video={selectedVideo}
+        job={selectedJob}
+        onSelectVideo={setSelectedVideoId}
+      />
 
       <div className="detail-grid">
         <div className="detail-main">
@@ -117,7 +140,7 @@ export function ProjectDetailPage({ projectId, maxUploadMb }: ProjectDetailPageP
               </div>
             </div>
             {jobId ? (
-              <JobProgress jobId={jobId} onSettled={onJobSettled} />
+              <JobProgress jobId={jobId} onSettled={onJobSettled} onJobChange={onJobChanged} />
             ) : (
               <EmptyState title="No jobs yet" message="Upload a video to start an import and inspection job." />
             )}

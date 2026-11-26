@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Video
-from ..schemas import VideoOut
+from ..schemas import VideoOut, build_video_out
 from ..services.storage import storage
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -16,9 +16,7 @@ CHUNK_SIZE = 1024 * 1024
 
 
 def video_to_out(video: Video) -> VideoOut:
-    payload = VideoOut.model_validate(video)
-    payload.stream_url = f"/api/v1/videos/{video.id}/stream"
-    return payload
+    return build_video_out(video, f"/api/v1/videos/{video.id}/stream")
 
 
 def find_video(db: Session, video_id: str) -> Video:

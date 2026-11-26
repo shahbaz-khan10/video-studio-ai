@@ -10,17 +10,15 @@ from ..schemas import (
     ProjectOut,
     ProjectSummary,
     ProjectUpdate,
-    VideoOut,
+    build_video_out,
 )
 from ..services.storage import storage
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-def video_to_out(video: Video) -> VideoOut:
-    payload = VideoOut.model_validate(video)
-    payload.stream_url = f"/api/v1/videos/{video.id}/stream"
-    return payload
+def video_to_out(video: Video):
+    return build_video_out(video, f"/api/v1/videos/{video.id}/stream")
 
 
 def project_to_out(project: Project, db: Session) -> ProjectOut:

@@ -46,6 +46,8 @@ def info() -> InfoOut:
             "video_preview": True,
             "stream_copy_policy": True,
             "processing_status": True,
+            "job_cancellation": True,
+            "job_retry": True,
             "translation": False,
             "voice_generation": False,
             "lip_sync": False,

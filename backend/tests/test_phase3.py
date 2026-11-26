@@ -5,6 +5,9 @@ import subprocess
 
 import pytest
 
+from app.database import SessionLocal
+from app.models import JobStep, ProcessingJob
+
 
 HEADER = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00"
 
@@ -88,6 +91,11 @@ def test_probe_frame_index_thumbnails_and_reprobe(client, sample_video):
     assert video["duration_ms"] is not None and 1900 <= video["duration_ms"] <= 2100
     assert video["pixel_format"] == "yuv420p"
     assert video["audio_codec"] == "aac"
+    assert video["audio_stream_count"] == 1
+    assert video["aspect_ratio"] == "16:9"
+    assert video["subtitle_streams"] == []
+    assert video["stream_validation"]["video"] == "readable"
+    assert video["stream_validation"]["audio"] == "readable"
     assert len(video["stream_layout"]) >= 2
 
     assets_response = client.get(f"/api/v1/videos/{video_id}/assets")
@@ -193,3 +201,55 @@ def test_incomplete_session_rejects_completion(client):
     cancelled = client.delete(f"/api/v1/uploads/sessions/{session['id']}")
     assert cancelled.status_code == 204
     assert client.get(f"/api/v1/uploads/sessions/{session['id']}").status_code == 404
+
+
+def test_job_cancel_and_retry(client, tmp_path):
+    project = create_project(client, name="Job lifecycle film")
+    sample = tmp_path / "lifecycle.mp4"
+    sample.write_bytes(HEADER + b"\x00" * 256)
+    accepted = upload(client, project["id"], sample)
+    video_id = accepted["video"]["id"]
+
+    with SessionLocal() as db:
+        queued = ProcessingJob(
+            project_id=project["id"],
+            video_id=video_id,
+            type="media_import",
+            status="queued",
+            progress=0,
+        )
+        db.add(queued)
+        db.flush()
+        db.add(JobStep(job_id=queued.id, position=0, name="validate_file", status="pending"))
+        db.commit()
+        queued_id = queued.id
+
+    cancel = client.post(f"/api/v1/jobs/{queued_id}/cancel")
+    assert cancel.status_code == 200, cancel.text
+    cancelled = cancel.json()
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["error_code"] == "CANCELLED"
+    assert cancelled["steps"][0]["status"] == "cancelled"
+    assert client.post(f"/api/v1/jobs/{queued_id}/cancel").status_code == 409
+
+    with SessionLocal() as db:
+        failed = ProcessingJob(
+            project_id=project["id"],
+            video_id=video_id,
+            type="media_import",
+            status="failed",
+            progress=50,
+            error_code="IMPORT_FAILED",
+            error_message="Forced failure",
+        )
+        db.add(failed)
+        db.commit()
+        failed_id = failed.id
+
+    retry = client.post(f"/api/v1/jobs/{failed_id}/retry")
+    assert retry.status_code == 202, retry.text
+    retried = retry.json()
+    assert retried["id"] != failed_id
+    assert retried["type"] == "media_import"
+    assert retried["status"] in {"queued", "running", "completed"}
+    assert client.get(f"/api/v1/jobs/{retried['id']}").status_code == 200

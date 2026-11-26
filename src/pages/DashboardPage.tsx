@@ -1,9 +1,15 @@
+import { useState } from "react";
 import { api } from "../lib/api";
 import { formatDate } from "../lib/format";
 import { useAsync } from "../hooks/useAsync";
-import { EmptyState, ErrorState, LoadingState, StatusBadge } from "../components/States";
+import { NewProjectDialog } from "../components/NewProjectDialog";
+import { ProjectProgress } from "../components/ProjectProgress";
+import { ProjectThumb } from "../components/ProjectThumb";
+import { EmptyState, ErrorState, LoadingState } from "../components/States";
+import type { Project } from "../types";
 
 export function DashboardPage() {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const projects = useAsync(() => api.listProjects(), []);
   const info = useAsync(() => api.info(), []);
   const health = useAsync(() => api.health(), []);
@@ -22,9 +28,14 @@ export function DashboardPage() {
             Create projects, upload source video, and inspect real metadata and processing status.
             Heavy AI stages stay on the central server and are added in later phases.
           </p>
-          <a className="button button-primary" href="#/projects">
-            Open projects
-          </a>
+          <div className="hero-actions">
+            <button className="button button-primary" type="button" onClick={() => setDialogOpen(true)}>
+              Create new project
+            </button>
+            <a className="button button-quiet" href="#/projects">
+              Open projects
+            </a>
+          </div>
         </div>
         <div className="hero-card">
           <span>Studio status</span>
@@ -83,10 +94,11 @@ export function DashboardPage() {
             <table>
               <thead>
                 <tr>
+                  <th>Preview</th>
                   <th>Name</th>
                   <th>Languages</th>
                   <th>Videos</th>
-                  <th>Status</th>
+                  <th>Status / progress</th>
                   <th>Updated</th>
                 </tr>
               </thead>
@@ -94,11 +106,19 @@ export function DashboardPage() {
                 {list.slice(0, 6).map((project) => (
                   <tr key={project.id}>
                     <td>
+                      <ProjectThumb projectId={project.id} compact />
+                    </td>
+                    <td>
                       <a href={`#/projects/${project.id}`}>{project.name}</a>
+                      <small className="row-sublink">
+                        <a href={`#/projects/${project.id}/studio`}>Studio</a>
+                      </small>
                     </td>
                     <td>{project.target_languages.join(", ") || "—"}</td>
                     <td>{project.video_count}</td>
-                    <td><StatusBadge value={project.latest_job_status ?? project.status} /></td>
+                    <td>
+                      <ProjectProgress projectId={project.id} fallbackStatus={project.latest_job_status ?? project.status} />
+                    </td>
                     <td>{formatDate(project.updated_at)}</td>
                   </tr>
                 ))}
@@ -125,6 +145,16 @@ export function DashboardPage() {
           )}
         </div>
       </section>
+      {dialogOpen && (
+        <NewProjectDialog
+          onClose={() => setDialogOpen(false)}
+          onCreated={(project: Project) => {
+            setDialogOpen(false);
+            projects.reload();
+            window.location.hash = `/projects/${project.id}`;
+          }}
+        />
+      )}
     </div>
   );
 }

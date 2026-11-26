@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import JobStep, MediaAsset, ProcessingJob, Video, utcnow
-from ..services.media import build_frame_index, file_sha256, generate_thumbnails, probe_video
+from ..services.media import AppError, build_frame_index, file_sha256, generate_thumbnails, probe_video
 from ..services.storage import storage
 
 STEP_NAMES = [
@@ -19,6 +19,22 @@ STEP_NAMES = [
     "create_thumbnails",
     "finalize",
 ]
+
+
+class JobCancelled(Exception):
+    pass
+
+
+def _job_status(job_id: str) -> str | None:
+    with SessionLocal() as check_db:
+        job = check_db.get(ProcessingJob, job_id)
+        return job.status if job else None
+
+
+def _ensure_active(job_id: str) -> None:
+    status = _job_status(job_id)
+    if status is None or status == "cancelled":
+        raise JobCancelled("Job was cancelled or removed")
 
 
 def create_import_job(db: Session, project_id: str, video_id: str, job_type: str = "media_import") -> ProcessingJob:
@@ -146,20 +162,26 @@ def run_import_job(job_id: str, video_id: str, client_metadata: dict) -> None:
             return
         job.status = "running"
         db.commit()
+        _ensure_active(job_id)
 
         _set_step(db, job, "validate_file", "running", "Checking stored file", 10)
+        _ensure_active(job_id)
         path = storage.absolute_path(video.storage_key)
         if not path.is_file() or path.stat().st_size == 0:
             raise RuntimeError("Stored video file is missing or empty")
         saved_size = path.stat().st_size
         _set_step(db, job, "validate_file", "completed", f"{saved_size} bytes on disk", 20)
+        _ensure_active(job_id)
 
         _set_step(db, job, "compute_checksum", "running", "Verifying checksum", 30)
+        _ensure_active(job_id)
         video.checksum_sha256 = file_sha256(path)
         db.commit()
         _set_step(db, job, "compute_checksum", "completed", video.checksum_sha256[:16], 40)
+        _ensure_active(job_id)
 
         _set_step(db, job, "probe_metadata", "running", "Reading video metadata", 50)
+        _ensure_active(job_id)
         try:
             probed = probe_video(path)
         except Exception as error:
@@ -183,8 +205,10 @@ def run_import_job(job_id: str, video_id: str, client_metadata: dict) -> None:
         _apply_probe(video, probed)
         db.commit()
         _set_step(db, job, "probe_metadata", "completed", f"Source: {probed['probe_source']}", 60)
+        _ensure_active(job_id)
 
         _set_step(db, job, "build_frame_index", "running", "Mapping time to frames", 70)
+        _ensure_active(job_id)
         if probed["probe_status"] == "probed":
             with tempfile.TemporaryDirectory(prefix="cinema-index-") as scratch:
                 index_path = Path(scratch) / "frame-index.json"
@@ -192,6 +216,7 @@ def run_import_job(job_id: str, video_id: str, client_metadata: dict) -> None:
                     json.dumps(build_frame_index(probed), indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
+                _ensure_active(job_id)
                 _register_asset(
                     db,
                     video,
@@ -205,11 +230,14 @@ def run_import_job(job_id: str, video_id: str, client_metadata: dict) -> None:
                     },
                 )
         _set_step(db, job, "build_frame_index", "completed", "Frame map stored as versioned asset", 78)
+        _ensure_active(job_id)
 
         _set_step(db, job, "create_thumbnails", "running", "Extracting preview frames", 85)
+        _ensure_active(job_id)
         if probed["probe_status"] == "probed":
             with tempfile.TemporaryDirectory(prefix="cinema-thumbs-") as scratch:
                 for thumbnail in generate_thumbnails(path, Path(scratch), probed):
+                    _ensure_active(job_id)
                     _register_asset(
                         db,
                         video,
@@ -223,20 +251,35 @@ def run_import_job(job_id: str, video_id: str, client_metadata: dict) -> None:
                         },
                     )
         _set_step(db, job, "create_thumbnails", "completed", "Sparse preview frames stored", 92)
+        _ensure_active(job_id)
 
         _set_step(db, job, "finalize", "running", "Saving video record", 96)
+        _ensure_active(job_id)
         job.status = "completed"
         job.progress = 100
         job.error_code = None
         job.error_message = None
         db.commit()
         _set_step(db, job, "finalize", "completed", "Video ready for preview", 100)
+    except JobCancelled:
+        current = db.get(ProcessingJob, job_id)
+        if current:
+            current.status = "cancelled"
+            current.error_code = "CANCELLED"
+            current.error_message = "Cancelled by user"
+            for step in current.steps:
+                if step.status in {"pending", "running"}:
+                    step.status = "cancelled"
+                    step.detail = "Cancelled by user"
+                    step.finished_at = utcnow()
+            db.commit()
     except Exception as error:
-        if "job" in locals() and job:
-            job.status = "failed"
-            job.error_code = "IMPORT_FAILED"
-            job.error_message = str(error)[:1000]
-            for step in job.steps:
+        current = db.get(ProcessingJob, job_id) if "job_id" in locals() else None
+        if current and current.status != "cancelled":
+            current.status = "failed"
+            current.error_code = "IMPORT_FAILED"
+            current.error_message = str(error)[:1000]
+            for step in current.steps:
                 if step.status == "running":
                     step.status = "failed"
                     step.detail = str(error)[:500]
@@ -244,3 +287,38 @@ def run_import_job(job_id: str, video_id: str, client_metadata: dict) -> None:
             db.commit()
     finally:
         db.close()
+
+
+def cancel_job(db: Session, job_id: str) -> ProcessingJob | None:
+    job = db.get(ProcessingJob, job_id)
+    if not job:
+        return None
+    if job.status not in {"queued", "running"}:
+        raise AppError(409, "JOB_NOT_CANCELLABLE", "Only queued or running jobs can be cancelled.")
+    job.status = "cancelled"
+    job.error_code = "CANCELLED"
+    job.error_message = "Cancelled by user"
+    for step in job.steps:
+        if step.status in {"pending", "running"}:
+            step.status = "cancelled"
+            step.detail = "Cancelled by user"
+            step.finished_at = utcnow()
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def prepare_retry_job(db: Session, job_id: str) -> tuple[ProcessingJob, str, dict]:
+    job = db.get(ProcessingJob, job_id)
+    if not job:
+        raise AppError(404, "NOT_FOUND", "Job not found")
+    if job.status not in {"failed", "cancelled"}:
+        raise AppError(409, "JOB_NOT_RETRYABLE", "Only failed or cancelled jobs can be retried.")
+    video = db.get(Video, job.video_id)
+    if not video:
+        raise AppError(404, "NOT_FOUND", "Video for this job no longer exists")
+    if not storage.absolute_path(video.storage_key).is_file():
+        raise AppError(410, "FILE_MISSING", "Stored video file is missing")
+    client_metadata = (video.metadata_json or {}).get("browser") or {}
+    retry = create_import_job(db, video.project_id, video.id, job.type)
+    return retry, video.id, client_metadata

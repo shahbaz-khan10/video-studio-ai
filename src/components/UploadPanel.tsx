@@ -1,5 +1,5 @@
 import { useRef, useState, type DragEvent } from "react";
-import { resolveVideoMimeType, uploadVideo, type VideoMetadata } from "../lib/api";
+import { api, resolveVideoMimeType, uploadVideo, type VideoMetadata } from "../lib/api";
 import type { UploadAccepted } from "../types";
 
 interface UploadPanelProps {
@@ -31,6 +31,8 @@ function readMetadata(file: File): Promise<VideoMetadata> {
 
 export function UploadPanel({ projectId, maxUploadMb, onUploaded }: UploadPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const sessionRef = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -38,7 +40,7 @@ export function UploadPanel({ projectId, maxUploadMb, onUploaded }: UploadPanelP
   const [dragging, setDragging] = useState(false);
 
   const selectFile = (candidate: File | undefined) => {
-    if (!candidate) return;
+    if (!candidate || uploading) return;
     setError(null);
     setProgress(0);
     if (!resolveVideoMimeType(candidate.name, candidate.type)) {
@@ -60,24 +62,52 @@ export function UploadPanel({ projectId, maxUploadMb, onUploaded }: UploadPanelP
 
   const submit = async () => {
     if (!file || uploading) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    sessionRef.current = null;
     setUploading(true);
     setProgress(0);
     setError(null);
     try {
       const metadata = await readMetadata(file);
-      const result = await uploadVideo(projectId, file, metadata, setProgress);
+      const result = await uploadVideo(projectId, file, metadata, setProgress, {
+        signal: controller.signal,
+        onSession: (sessionId) => {
+          sessionRef.current = sessionId;
+        },
+      });
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
       onUploaded(result);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Upload failed.");
+      if (!controller.signal.aborted) {
+        setError(reason instanceof Error ? reason.message : "Upload failed.");
+      }
     } finally {
-      setUploading(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        sessionRef.current = null;
+        setUploading(false);
+      }
     }
   };
 
+  const cancel = async () => {
+    const sessionId = sessionRef.current;
+    abortRef.current?.abort();
+    if (sessionId) {
+      try {
+        await api.cancelUploadSession(sessionId);
+      } catch {}
+    }
+    sessionRef.current = null;
+    setUploading(false);
+    setProgress(0);
+    setError(null);
+  };
+
   return (
-    <section className="panel upload-panel">
+    <section className="panel upload-panel" id="upload-panel">
       <div className="panel-heading">
         <div>
           <h2>Add source video</h2>
@@ -113,9 +143,16 @@ export function UploadPanel({ projectId, maxUploadMb, onUploaded }: UploadPanelP
             <strong>{file.name}</strong>
             <span>{(file.size / 1024 / 1024).toFixed(1)} MB</span>
           </div>
-          <button className="button button-primary" type="button" onClick={submit} disabled={uploading}>
-            {uploading ? `Uploading ${progress}%` : "Upload video"}
-          </button>
+          <div className="selected-file-actions">
+            <button className="button button-primary" type="button" onClick={submit} disabled={uploading}>
+              {uploading ? `Uploading ${progress}%` : error ? "Retry upload" : "Upload video"}
+            </button>
+            {uploading && (
+              <button className="button button-quiet" type="button" onClick={cancel}>
+                Cancel upload
+              </button>
+            )}
+          </div>
         </div>
       )}
       {uploading && (

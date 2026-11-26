@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 from fractions import Fraction
+from math import gcd
 from pathlib import Path
 
 from ..config import settings
@@ -30,7 +31,7 @@ def detect_container(head: bytes) -> str | None:
     if len(head) < 12:
         return None
     if head[4:8] == b"ftyp":
-        return "mp4"
+        return "quicktime" if head[8:12] == b"qt  " else "mp4"
     if head[:4] == b"\x1a\x45\xdf\xa3":
         return "matroska"
     if head[:4] == b"RIFF" and head[8:12] == b"AVI ":
@@ -99,6 +100,37 @@ def _int_or_none(value: object) -> int | None:
         return None
 
 
+def _stream_summary(streams: list[dict]) -> dict:
+    layout = [item for item in streams if isinstance(item, dict)]
+    video_streams = [item for item in layout if str(item.get("codec_type", "")).lower() == "video"]
+    audio_streams = [item for item in layout if str(item.get("codec_type", "")).lower() == "audio"]
+    subtitle_streams = [
+        {
+            "index": item.get("index"),
+            "codec_name": item.get("codec_name"),
+            "language": item.get("language"),
+        }
+        for item in layout
+        if str(item.get("codec_type", "")).lower() == "subtitle"
+    ]
+    width = next((_int_or_none(item.get("width")) for item in video_streams), None)
+    height = next((_int_or_none(item.get("height")) for item in video_streams), None)
+    aspect_ratio = None
+    if width and height:
+        divisor = gcd(width, height)
+        aspect_ratio = f"{width // divisor}:{height // divisor}"
+    return {
+        "audio_stream_count": len(audio_streams),
+        "subtitle_streams": subtitle_streams,
+        "aspect_ratio": aspect_ratio,
+        "stream_validation": {
+            "video": "readable" if video_streams else "missing",
+            "audio": "readable" if audio_streams else "none",
+            "subtitle_stream_count": len(subtitle_streams),
+        },
+    }
+
+
 def _probe_with_ffprobe(binary: str, path: Path) -> dict:
     result = subprocess.run(
         [binary, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)],
@@ -133,12 +165,14 @@ def _probe_with_ffprobe(binary: str, path: Path) -> dict:
             "height": _int_or_none(item.get("height")),
             "sample_rate": _int_or_none(item.get("sample_rate")),
             "channels": _int_or_none(item.get("channels")),
+            "language": (item.get("tags") or {}).get("language"),
             "duration_ms": _int_or_none(float(item.get("duration") or 0) * 1000),
         }
         for item in streams
     ]
 
     return {
+        **_stream_summary(stream_layout),
         "duration_ms": duration_ms,
         "width": _int_or_none(video.get("width")),
         "height": _int_or_none(video.get("height")),
@@ -196,11 +230,20 @@ def _probe_with_ffmpeg(binary: str, path: Path) -> dict:
                 "codec_name": match.group(3),
             }
         )
+    if size_match:
+        video_stream = next(
+            (item for item in stream_layout if item["codec_type"] == "video"),
+            None,
+        )
+        if video_stream:
+            video_stream["width"] = int(size_match.group(1))
+            video_stream["height"] = int(size_match.group(2))
 
     if duration_ms is None and not size_match:
         raise RuntimeError("ffmpeg could not read media metadata")
 
     return {
+        **_stream_summary(stream_layout),
         "duration_ms": duration_ms,
         "width": int(size_match.group(1)) if size_match else None,
         "height": int(size_match.group(2)) if size_match else None,
