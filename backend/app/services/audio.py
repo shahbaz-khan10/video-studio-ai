@@ -5,8 +5,10 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 import wave
+from contextlib import contextmanager
 from http.client import HTTPConnection, HTTPSConnection
 from pathlib import Path
 from urllib.parse import urlparse
@@ -313,6 +315,18 @@ def decode_check(path: Path) -> bool:
         return False
     result = _run([ffmpeg, "-v", "error", "-i", str(path), "-f", "null", "-"], timeout=1800)
     return result.returncode == 0
+
+
+@contextmanager
+def _temp_wav_path(prefix: str = "voice"):
+    """A private temp WAV path for short-lived engine preview output."""
+    handle = tempfile.NamedTemporaryFile(prefix=f"{prefix}-", suffix=".wav", delete=False)
+    path = Path(handle.name)
+    handle.close()
+    try:
+        yield path
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def validate_audio_file(

@@ -611,3 +611,113 @@ class CharacterAssignment(Base):
     )
     segment: Mapped[TranscriptSegment] = relationship(back_populates="character_assignments")
     video: Mapped[Video] = relationship(back_populates="character_assignments")
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 — character voice profiles and customisation.
+# ---------------------------------------------------------------------------
+
+
+class VoiceReference(Base):
+    """A consented, user-supplied audio sample for one character and language."""
+
+    __tablename__ = "voice_references"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    character_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("characters.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    language: Mapped[str] = mapped_column(String(8), nullable=False, default="ur")
+    storage_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    peak: Mapped[float | None] = mapped_column(Float, nullable=True)
+    consent_status: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    consent_text_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+    project: Mapped[Project] = relationship()
+    character: Mapped[Character] = relationship()
+
+
+class CharacterVoiceProfile(Base):
+    """One immutable-by-default, versioned voice profile for a character/language.
+
+    Editing settings creates a new version so old previews stay reproducible.
+    ``locked`` prevents an accidental change from the UI until explicitly unlocked.
+    """
+
+    __tablename__ = "character_voice_profiles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    character_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("characters.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    language: Mapped[str] = mapped_column(String(8), nullable=False, default="ur", index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    engine: Mapped[str] = mapped_column(String(32), nullable=False, default="piper")
+    model_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    voice_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    engine_params_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    characteristics_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    reference_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("voice_references.id", ondelete="SET NULL"), nullable=True
+    )
+    consent_status: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    preset_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("voice_presets.id", ondelete="SET NULL"), nullable=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    project: Mapped[Project] = relationship()
+    character: Mapped[Character | None] = relationship()
+    reference: Mapped[VoiceReference | None] = relationship()
+
+
+class VoicePreset(Base):
+    """A reusable, engine-agnostic set of voice settings for one language."""
+
+    __tablename__ = "voice_presets"
+    __table_args__ = (UniqueConstraint("project_id", "name", "language", name="uq_voice_preset_name_language"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    language: Mapped[str] = mapped_column(String(8), nullable=False, default="ur")
+    engine: Mapped[str] = mapped_column(String(32), nullable=False, default="piper")
+    model_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    voice_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    engine_params_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    characteristics_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    project: Mapped[Project] = relationship()

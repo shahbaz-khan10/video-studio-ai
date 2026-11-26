@@ -20,6 +20,7 @@ from ..models import (
     utcnow,
 )
 from ..services.media import AppError
+from . import voice_profiles as voice_profiles_service
 
 
 def production_info() -> dict:
@@ -338,6 +339,7 @@ def merge_characters(db: Session, target: Character, source_ids: list[str], name
         db.flush()
         db.expire(source, ["speaker_turns", "face_tracks", "assignments"])
         db.delete(source)
+    voice_profiles_service.on_merge(db, target, source_ids)
     if name:
         target.name = name.strip()
     target.status = "confirmed"
@@ -414,5 +416,6 @@ def split_character(
         source.voice_embedding_json = centroid([_turn_embedding(turn) for turn in remaining if _turn_embedding(turn)])
         source.voice_sample_count = len(remaining)
     source.updated_at = utcnow()
+    voice_profiles_service.on_split(db, source, new)
     db.flush()
     return new

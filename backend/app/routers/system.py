@@ -10,6 +10,8 @@ from ..services.media import probe_available
 from ..services.transcription import production_info as transcription_info
 from ..services.translation_engine import engine_info as translation_info
 from ..services.vision import production_info as vision_info
+from ..services.tts_engine import engine_info as dub_audio_info
+from ..services.voice_engine import engine_info as voice_engine_info
 
 router = APIRouter(tags=["system"])
 
@@ -34,7 +36,7 @@ def health() -> HealthOut:
 def info() -> InfoOut:
     return InfoOut(
         app=settings.app_name,
-        version="0.5.0-phase8",
+        version="0.6.0-phase9",
         max_upload_mb=settings.max_upload_mb,
         upload_chunk_mb=settings.upload_chunk_mb,
         thumbnail_count=settings.thumbnail_count,
@@ -78,7 +80,15 @@ def info() -> InfoOut:
             "context_aware_translation": True,
             "roman_urdu": True,
             "translation_refiner_configured": bool(settings.translation_refiner_url),
-            "voice_generation": False,
+            "voice_profiles": True,
+            "voice_characteristics": True,
+            "voice_reference_upload": True,
+            "voice_reference_preview": True,
+            "voice_presets": True,
+            "voice_preview": True,
+            "voice_consent_controls": True,
+            "voice_generation": True,  # Phase 10
+            "dub_audio_batch_generation": True,
             "lip_sync": False,
             "timeline_editor": False,
         },
@@ -90,4 +100,5 @@ def info() -> InfoOut:
             "vision": vision_info(),
         },
         translation=translation_info(),
+        voice={**voice_engine_info(), "generation": dub_audio_info()},
     )

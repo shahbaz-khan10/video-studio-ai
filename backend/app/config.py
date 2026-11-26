@@ -103,6 +103,39 @@ class Settings(BaseSettings):
     translation_refiner_token: str | None = None
     translation_refiner_timeout_s: float = 120.0
 
+    # Phase 9 — per-character voice profiles (local, open-source engines only).
+    # voice_backend: auto | piper | coqui | remote | none
+    #   auto prefers Piper when a voice directory is configured, otherwise the
+    #   self-hosted HTTP worker when configured, otherwise metadata-only.
+    voice_backend: str = "auto"
+    voice_device: str = "cpu"
+    voice_model_cache_dir: Path | None = None
+    # Directory with Piper .onnx + .onnx.json + MODEL_CARD files. No voices are
+    # bundled or downloaded automatically; licences must be reviewed per voice.
+    voice_piper_models_dir: Path | None = None
+    voice_piper_download_dir: Path | None = None
+    # Optional self-hosted OpenAI-compatible /v1/audio/speech worker. Never a
+    # paid API; the user must point this at their own local or rented server.
+    voice_remote_url: str | None = None
+    voice_remote_token: str | None = None
+    voice_reference_max_mb: int = 12
+    voice_reference_min_s: float = 2.0
+    voice_reference_max_s: float = 30.0
+    voice_reference_min_sample_rate: int = 16000
+    voice_preview_max_chars: int = 240
+    voice_preview_timeout_s: float = 180.0
+    # Explicit acknowledgement that the user owns a custom voice or has the
+    # speaker's permission. Stored per reference sample with the policy version.
+    voice_consent_policy_version: str = "2026-11-26"
+
+    @property
+    def effective_voice_cache_dir(self) -> Path:
+        return self.voice_model_cache_dir or (self.effective_model_cache_dir / "voice")
+
+    @property
+    def voice_reference_max_bytes(self) -> int:
+        return min(self.voice_reference_max_mb * 1024 * 1024, self.max_upload_bytes)
+
     @property
     def effective_translation_cache_dir(self) -> Path:
         return self.translation_model_cache_dir or (self.effective_model_cache_dir / "hf")

@@ -4,8 +4,19 @@ import type {
   Character,
   CharacterBundle,
   CharacterRelationshipItem,
+  CharacterVoiceProfileOut,
   GlossaryTerm,
   TargetLanguage,
+  VoiceCatalogItem,
+  VoiceConsentStatus,
+  VoiceEngineInfoOut,
+  VoiceLanguage,
+  VoicePresetIn,
+  VoicePresetOut,
+  VoicePreviewRequest,
+  VoiceProfileBundleOut,
+  VoiceProfileUpdate,
+  VoiceReferenceUploadOut,
   TranslateAllRequest,
   TranslationBundle,
   TranslationLine,
@@ -73,6 +84,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+async function requestBlob(path: string, init: RequestInit): Promise<Blob> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...init.headers,
+    },
+  });
+  if (!response.ok) throw await parseError(response);
+  return response.blob();
 }
 
 export const api = {
@@ -211,6 +234,76 @@ export const api = {
     }),
   listProjectCharacters: (projectId: string) =>
     request<Character[]>(`/api/v1/projects/${encodeURIComponent(projectId)}/characters`),
+  getVoiceEngine: () => request<VoiceEngineInfoOut>("/api/v1/voice/engine"),
+  getVoiceCatalog: () => request<VoiceCatalogItem[]>("/api/v1/voice/catalog"),
+  getProjectVoiceProfiles: (projectId: string) =>
+    request<VoiceProfileBundleOut>(`/api/v1/projects/${encodeURIComponent(projectId)}/voice-profiles`),
+  listCharacterVoiceProfiles: (characterId: string, language?: VoiceLanguage) =>
+    request<CharacterVoiceProfileOut[]>(
+      `/api/v1/characters/${encodeURIComponent(characterId)}/voice-profiles${
+        language ? `?language=${encodeURIComponent(language)}` : ""
+      }`,
+    ),
+  saveVoiceProfile: (
+    characterId: string,
+    payload: Partial<VoiceProfileUpdate> & Pick<VoiceProfileUpdate, "language">,
+  ) =>
+    request<CharacterVoiceProfileOut>(`/api/v1/characters/${encodeURIComponent(characterId)}/voice-profile`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  resetVoiceProfile: (characterId: string, language: VoiceLanguage) =>
+    request<CharacterVoiceProfileOut>(
+      `/api/v1/characters/${encodeURIComponent(characterId)}/voice-profile/reset?language=${encodeURIComponent(language)}`,
+      { method: "POST" },
+    ),
+  activateVoiceProfile: (profileId: string) =>
+    request<CharacterVoiceProfileOut>(`/api/v1/voice-profiles/${encodeURIComponent(profileId)}/activate`, {
+      method: "POST",
+    }),
+  listVoicePresets: (projectId: string) =>
+    request<VoicePresetOut[]>(`/api/v1/projects/${encodeURIComponent(projectId)}/voice-presets`),
+  saveVoicePreset: (projectId: string, payload: VoicePresetIn, presetId?: string | null) =>
+    request<VoicePresetOut>(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/voice-presets${
+        presetId ? `?preset_id=${encodeURIComponent(presetId)}` : ""
+      }`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    ),
+  deleteVoicePreset: (presetId: string) =>
+    request<void>(`/api/v1/voice-presets/${encodeURIComponent(presetId)}`, { method: "DELETE" }),
+  uploadVoiceReference: (
+    characterId: string,
+    file: File,
+    language: VoiceLanguage,
+    confirmOwnership: boolean,
+    policyVersion: string,
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("language", language);
+    form.append("confirm_ownership", confirmOwnership ? "true" : "false");
+    form.append("policy_version", policyVersion);
+    return request<VoiceReferenceUploadOut>(
+      `/api/v1/characters/${encodeURIComponent(characterId)}/voice-profile/reference`,
+      { method: "POST", body: form },
+    );
+  },
+  updateVoiceConsent: (
+    characterId: string,
+    language: VoiceLanguage,
+    status: Extract<VoiceConsentStatus, "granted" | "revoked">,
+    confirmOwnership: boolean,
+    policyVersion: string,
+  ) =>
+    request<CharacterVoiceProfileOut>(
+      `/api/v1/characters/${encodeURIComponent(characterId)}/voice-profile/consent?language=${encodeURIComponent(language)}`,
+      { method: "PUT", body: JSON.stringify({ status, confirm_ownership: confirmOwnership, policy_version: policyVersion }) },
+    ),
+  deleteVoiceReference: (referenceId: string) =>
+    request<void>(`/api/v1/voice-references/${encodeURIComponent(referenceId)}`, { method: "DELETE" }),
+  previewVoice: (payload: VoicePreviewRequest) =>
+    requestBlob("/api/v1/voice-preview", { method: "POST", body: JSON.stringify(payload) }),
   videoUrl: (video: Video) => `${API_BASE}${video.stream_url}`,
   assetUrl: (url: string) => `${API_BASE}${url}`,
   mediaUrl: (asset: MediaAsset) => `${API_BASE}${asset.url}`,

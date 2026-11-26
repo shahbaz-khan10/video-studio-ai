@@ -238,6 +238,7 @@ export interface ServerInfo {
   audio?: Record<string, unknown>;
   transcription?: Record<string, unknown>;
   characters?: Record<string, unknown>;
+  voice?: Record<string, unknown>;
 }
 
 export interface Character {
@@ -332,6 +333,7 @@ export interface CharacterBundle {
   visual_candidates: VisualCandidate[];
   assignments: CharacterAssignment[];
   dialogue: DialogueItem[];
+  voice_profiles?: Record<string, unknown>[];
   limitations: string[];
   notes: string[];
   diarization: Record<string, unknown>;
@@ -542,4 +544,192 @@ export interface TranslateAllRequest {
   overwrite_manual?: boolean;
   only_missing?: boolean;
   segment_ids?: string[] | null;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9 — character voice profiles
+// ---------------------------------------------------------------------------
+
+export type VoiceLanguage = TargetLanguage;
+export type VoiceGender = "unknown" | "male" | "female";
+export type VoiceAge = "young" | "adult" | "mature";
+export type VoicePitch = "low" | "medium" | "high";
+export type VoiceTone = "soft" | "deep" | "heavy" | "light" | "neutral";
+export type VoiceEmotion = "neutral" | "calm" | "happy" | "sad" | "angry" | "tense" | "warm" | "serious";
+export type VoiceConsentStatus = "none" | "pending" | "granted" | "revoked";
+
+export interface VoiceCharacteristics {
+  gender: VoiceGender;
+  age: VoiceAge;
+  pitch: VoicePitch;
+  tone: VoiceTone;
+  speed: number;
+  accent: string | null;
+  intensity: number;
+  emotion: VoiceEmotion;
+}
+
+export interface VoiceEngineParams {
+  length_scale?: number | null;
+  noise_scale?: number | null;
+  noise_w_scale?: number | null;
+  speaker_id?: number | null;
+  volume?: number | null;
+  seed?: number | null;
+}
+
+export interface VoiceProfileUpdate {
+  language: VoiceLanguage;
+  engine?: string | null;
+  voice_id?: string | null;
+  model_id?: string | null;
+  characteristics: VoiceCharacteristics;
+  params: VoiceEngineParams;
+  preset_id?: string | null;
+  reference_id?: string | null;
+  notes?: string | null;
+  locked?: boolean | null;
+}
+
+export interface VoicePresetIn {
+  name: string;
+  language: VoiceLanguage;
+  engine: string;
+  model_id?: string | null;
+  voice_id?: string | null;
+  characteristics: VoiceCharacteristics;
+  params: VoiceEngineParams;
+}
+
+export interface VoicePresetOut extends VoicePresetIn {
+  id: string;
+  project_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CharacterVoiceProfileOut {
+  id: string;
+  project_id: string;
+  character_id: string | null;
+  language: string;
+  version: number;
+  active: boolean;
+  locked: boolean;
+  engine: string;
+  engine_label: string;
+  model_id: string | null;
+  voice_id: string | null;
+  voice_label: string | null;
+  license: string | null;
+  commercial_use: boolean | null;
+  characteristics: VoiceCharacteristics;
+  params: VoiceEngineParams;
+  supported_controls: string[];
+  ignored_controls: string[];
+  reference_id: string | null;
+  reference_url: string | null;
+  consent_status: VoiceConsentStatus;
+  consent_at: string | null;
+  revoked_at: string | null;
+  usable: boolean;
+  preset_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoiceReferenceOut {
+  id: string;
+  project_id: string;
+  character_id: string;
+  language: string;
+  filename: string;
+  url: string;
+  duration_ms: number | null;
+  sample_rate: number | null;
+  channels: number | null;
+  rms: number | null;
+  peak: number | null;
+  consent_status: VoiceConsentStatus;
+  consent_text_version: string | null;
+  consent_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface VoiceReferenceUploadOut {
+  reference: VoiceReferenceOut;
+  profile: CharacterVoiceProfileOut;
+}
+
+export interface VoiceOptionOut {
+  id: string;
+  label: string;
+  language: string;
+  gender: string;
+  quality: string | null;
+  sample_rate: number | null;
+  license: string;
+  commercial_use: boolean | null;
+  cached: boolean;
+  preview_available: boolean;
+  supports_reference: boolean;
+  supports_speaker_id?: boolean;
+  source: string;
+}
+
+export interface VoiceCapabilityOut {
+  key: string;
+  label: string;
+  supported: boolean;
+}
+
+export interface VoiceEngineInfoOut {
+  backend: string;
+  selected: string;
+  label: string;
+  license: string;
+  commercial_use: boolean | null;
+  device: string;
+  available: boolean;
+  loaded: boolean;
+  languages: string[];
+  voices: VoiceOptionOut[];
+  capabilities: VoiceCapabilityOut[];
+  requirements: Record<string, unknown>;
+  notes: string;
+  consent_required: boolean;
+}
+
+export interface VoiceProfileBundleOut {
+  project_id: string;
+  engine: VoiceEngineInfoOut;
+  profiles: CharacterVoiceProfileOut[];
+  presets: VoicePresetOut[];
+  references: VoiceReferenceOut[];
+  consent_policy: { version: string; statement: string; required: boolean };
+  sample_limits: {
+    max_mb: number;
+    min_s: number;
+    max_s: number;
+    min_sample_rate: number;
+    formats: string[];
+  };
+  limitations: string[];
+}
+
+export interface VoiceCatalogItem {
+  id: string;
+  language: string;
+  gender: string;
+  license: string;
+}
+
+export interface VoicePreviewRequest {
+  character_id?: string | null;
+  language: VoiceLanguage;
+  text: string;
+  profile_id?: string | null;
+  profile?: VoiceProfileUpdate | null;
 }

@@ -400,6 +400,7 @@ class CharacterBundleOut(BaseModel):
     visual_candidates: list[VisualCandidateOut] = Field(default_factory=list)
     assignments: list[CharacterAssignmentOut] = Field(default_factory=list)
     dialogue: list[DialogueItemOut] = Field(default_factory=list)
+    voice_profiles: list[dict] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     diarization: dict = Field(default_factory=dict)
@@ -458,6 +459,7 @@ class InfoOut(BaseModel):
     transcription: dict = Field(default_factory=dict)
     characters: dict = Field(default_factory=dict)
     translation: dict = Field(default_factory=dict)
+    voice: dict = Field(default_factory=dict)
 
 
 class ErrorOut(BaseModel):
@@ -561,3 +563,198 @@ class GlossaryUpdate(BaseModel):
 
 class SceneNoteUpdate(BaseModel):
     note: str = Field(default="", max_length=4000)
+
+
+# ---------------------------------------------------------------------------
+# Phase 9 — character voice profiles and customisation
+# ---------------------------------------------------------------------------
+
+VoiceLanguage = Literal["ur", "hi"]
+VoiceGender = Literal["unknown", "male", "female"]
+VoiceAge = Literal["young", "adult", "mature"]
+VoicePitch = Literal["low", "medium", "high"]
+VoiceTone = Literal["soft", "deep", "heavy", "light", "neutral"]
+VoiceEmotion = Literal["neutral", "calm", "happy", "sad", "angry", "tense", "warm", "serious"]
+VoiceConsentStatus = Literal["none", "pending", "granted", "revoked"]
+
+
+class VoiceCharacteristics(BaseModel):
+    """Human-facing settings. The engine adapter decides which ones are real."""
+
+    gender: VoiceGender = "unknown"
+    age: VoiceAge = "adult"
+    pitch: VoicePitch = "medium"
+    tone: VoiceTone = "neutral"
+    speed: float = Field(default=1.0, ge=0.5, le=2.5)
+    accent: str | None = Field(default=None, max_length=64)
+    intensity: float = Field(default=1.0, ge=0.0, le=2.0)
+    emotion: VoiceEmotion = "neutral"
+
+
+class VoiceEngineParams(BaseModel):
+    """Engine-native parameters (Piper, self-hosted workers, etc.)."""
+
+    length_scale: float | None = Field(default=None, ge=0.5, le=2.5)
+    noise_scale: float | None = Field(default=None, ge=0.0, le=1.5)
+    noise_w_scale: float | None = Field(default=None, ge=0.0, le=1.5)
+    speaker_id: int | None = Field(default=None, ge=0, le=256)
+    volume: float | None = Field(default=None, ge=0.0, le=2.0)
+    seed: int | None = Field(default=None, ge=0, le=2_147_483_647)
+
+
+class VoiceProfileUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    language: VoiceLanguage = "ur"
+    engine: str | None = Field(default=None, max_length=32)
+    voice_id: str | None = Field(default=None, max_length=160)
+    model_id: str | None = Field(default=None, max_length=160)
+    characteristics: VoiceCharacteristics = Field(default_factory=VoiceCharacteristics)
+    params: VoiceEngineParams = Field(default_factory=VoiceEngineParams)
+    preset_id: str | None = None
+    reference_id: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+    locked: bool | None = None
+
+
+class VoicePresetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    language: VoiceLanguage = "ur"
+    engine: str = Field(default="piper", max_length=32)
+    model_id: str | None = Field(default=None, max_length=160)
+    voice_id: str | None = Field(default=None, max_length=160)
+    characteristics: VoiceCharacteristics = Field(default_factory=VoiceCharacteristics)
+    params: VoiceEngineParams = Field(default_factory=VoiceEngineParams)
+
+
+class VoicePresetOut(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    language: str
+    engine: str
+    model_id: str | None = None
+    voice_id: str | None = None
+    characteristics: VoiceCharacteristics
+    params: VoiceEngineParams
+    created_at: datetime
+    updated_at: datetime
+
+
+class CharacterVoiceProfileOut(BaseModel):
+    id: str
+    project_id: str
+    character_id: str | None = None
+    language: str
+    version: int
+    active: bool
+    locked: bool
+    engine: str
+    engine_label: str
+    model_id: str | None = None
+    voice_id: str | None = None
+    voice_label: str | None = None
+    license: str | None = None
+    commercial_use: bool | None = None
+    characteristics: VoiceCharacteristics
+    params: VoiceEngineParams
+    supported_controls: list[str] = Field(default_factory=list)
+    ignored_controls: list[str] = Field(default_factory=list)
+    reference_id: str | None = None
+    reference_url: str | None = None
+    consent_status: str
+    consent_at: datetime | None = None
+    revoked_at: datetime | None = None
+    usable: bool = True
+    preset_id: str | None = None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class VoiceReferenceOut(BaseModel):
+    id: str
+    project_id: str
+    character_id: str
+    language: str
+    filename: str
+    url: str
+    duration_ms: int | None = None
+    sample_rate: int | None = None
+    channels: int | None = None
+    rms: float | None = None
+    peak: float | None = None
+    consent_status: str
+    consent_text_version: str | None = None
+    consent_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
+
+
+class VoiceReferenceUploadOut(BaseModel):
+    reference: VoiceReferenceOut
+    profile: CharacterVoiceProfileOut
+
+
+class VoiceConsentUpdate(BaseModel):
+    status: Literal["granted", "revoked"]
+    confirm_ownership: bool = False
+    policy_version: str = Field(default="2026-11-26", max_length=32)
+
+
+class VoiceOptionOut(BaseModel):
+    id: str
+    label: str
+    language: str
+    gender: str = "unknown"
+    quality: str | None = None
+    sample_rate: int | None = None
+    license: str = "unknown"
+    commercial_use: bool | None = None
+    cached: bool = False
+    preview_available: bool = False
+    supports_reference: bool = False
+    supports_speaker_id: bool = False
+    source: str = "local"
+
+
+class VoiceCapabilityOut(BaseModel):
+    key: str
+    label: str
+    supported: bool
+
+
+class VoiceEngineInfoOut(BaseModel):
+    backend: str
+    selected: str
+    label: str
+    license: str
+    commercial_use: bool | None = None
+    device: str
+    available: bool
+    loaded: bool
+    languages: list[str] = Field(default_factory=list)
+    voices: list[VoiceOptionOut] = Field(default_factory=list)
+    capabilities: list[VoiceCapabilityOut] = Field(default_factory=list)
+    requirements: dict = Field(default_factory=dict)
+    notes: str = ""
+    consent_required: bool = True
+
+
+class VoiceProfileBundleOut(BaseModel):
+    project_id: str
+    engine: VoiceEngineInfoOut
+    profiles: list[CharacterVoiceProfileOut] = Field(default_factory=list)
+    presets: list[VoicePresetOut] = Field(default_factory=list)
+    references: list[VoiceReferenceOut] = Field(default_factory=list)
+    consent_policy: dict = Field(default_factory=dict)
+    sample_limits: dict = Field(default_factory=dict)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class VoicePreviewRequest(BaseModel):
+    character_id: str | None = None
+    language: VoiceLanguage = "ur"
+    text: str = Field(min_length=1, max_length=240)
+    profile_id: str | None = None
+    profile: VoiceProfileUpdate | None = None

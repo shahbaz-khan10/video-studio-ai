@@ -141,7 +141,7 @@ def test_audio_extraction_formats_preserve_stream_properties(audio_video, tmp_pa
 
 def test_info_reports_phase4_capabilities(client):
     body = client.get("/api/v1/info").json()
-    assert body["version"] == "0.5.0-phase8"
+    assert body["version"] == "0.6.0-phase9"
     assert body["ai_stages"] == "partial"
     for flag in (
         "audio_extraction",

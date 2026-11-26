@@ -2,11 +2,13 @@ import { useCallback, useRef, useState } from "react";
 import { AudioMixerPanel } from "../components/AudioMixerPanel";
 import { AudioPreviewPanel } from "../components/AudioPreviewPanel";
 import { CharacterPanel } from "../components/CharacterPanel";
+import { DubAudioPanel } from "../components/DubAudioPanel";
 import { JobProgress } from "../components/JobProgress";
 import { StatusBadge } from "../components/States";
 import { TranscriptPanel } from "../components/TranscriptPanel";
 import { TranslationPanel } from "../components/TranslationPanel";
 import { UploadPanel } from "../components/UploadPanel";
+import { VoiceProfilePanel } from "../components/VoiceProfilePanel";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { useAsync } from "../hooks/useAsync";
 import { api } from "../lib/api";
@@ -229,36 +231,11 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
               <div className="panel-heading">
                 <div>
                   <h2>Voice Profiles</h2>
-                  <p>Reference and target voice slots.</p>
+                  <p>Per-character voice assignment, customization, consented samples and real previews.</p>
                 </div>
-                <span className="chip chip-planned">Generation · planned</span>
+                <span className="chip">Profiles · live</span>
               </div>
-              <ul className="voice-list">
-                <li>
-                  <span className="voice-avatar">EN</span>
-                  <div>
-                    <strong>Original English</strong>
-                    <small>Reference track · {selectedVideo!.audio_codec ?? "audio codec unknown"}</small>
-                  </div>
-                  <span className="badge badge-draft">reference</span>
-                </li>
-                <li>
-                  <span className="voice-avatar">UR</span>
-                  <div>
-                    <strong>Urdu voice</strong>
-                    <small>No profile generated</small>
-                  </div>
-                  <span className="chip chip-planned">planned</span>
-                </li>
-                <li>
-                  <span className="voice-avatar">HI</span>
-                  <div>
-                    <strong>Hindi voice</strong>
-                    <small>No profile generated</small>
-                  </div>
-                  <span className="chip chip-planned">planned</span>
-                </li>
-              </ul>
+              <VoiceProfilePanel key={selectedVideo!.id} projectId={projectId} videoId={selectedVideo!.id} />
             </section>
 
             <section className="panel studio-translation">
@@ -277,6 +254,17 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
                 previewActive={mixerPreviewActive}
                 onJobStarted={(jobId) => setActiveJobId(jobId)}
               />
+            </section>
+
+            <section className="panel studio-dub-audio">
+              <div className="panel-heading">
+                <div>
+                  <h2>Voice Generation</h2>
+                  <p>Synthetic Urdu and Hindi dialogue in each character's voice. Preview, regenerate, approve and download.</p>
+                </div>
+                <span className="chip">AI text-to-speech</span>
+              </div>
+              <DubAudioPanel key={selectedVideo!.id} videoId={selectedVideo!.id} onJobStarted={(jobId) => setActiveJobId(jobId)} />
             </section>
 
             <section className="panel studio-timeline">

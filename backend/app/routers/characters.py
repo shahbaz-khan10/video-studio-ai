@@ -36,6 +36,7 @@ from ..schemas import (
 from ..services import characters as characters_service
 from ..services import diarization as diarization_service
 from ..services import vision as vision_service
+from ..services import voice_profiles as voice_profiles_service
 from ..services.jobs import create_character_job, run_character_job
 from ..services.media import AppError
 from ..services.storage import storage
@@ -170,6 +171,7 @@ def build_bundle(db: Session, video: Video) -> CharacterBundleOut:
         visual_candidates=candidate_out,
         assignments=assignments,
         dialogue=dialogue,
+        voice_profiles=voice_profiles_service.character_voice_payload(db, video.project_id),
         limitations=metadata.get("limitations") or [],
         notes=metadata.get("notes") or [],
         diarization=metadata.get("diarization") or diarization_service.production_info(),
