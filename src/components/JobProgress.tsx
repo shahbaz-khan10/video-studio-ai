@@ -103,7 +103,9 @@ export function JobProgress({ jobId, onSettled, onJobChange }: JobProgressProps)
                   ? "Character detection"
                   : job.type === "translation"
                     ? "Translation"
-                    : "Import & inspect"}
+                    : job.type === "dub_audio_generation"
+                      ? "Voice generation"
+                      : "Import & inspect"}
           </strong>
           <span className="job-type">{job.type}</span>
         </div>
