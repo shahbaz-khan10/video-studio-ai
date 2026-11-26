@@ -94,7 +94,15 @@ export function JobProgress({ jobId, onSettled, onJobChange }: JobProgressProps)
     <div className={`job-card job-${job.status}`}>
       <div className="job-head">
         <div>
-          <strong>Import &amp; inspect</strong>
+          <strong>
+            {job.type === "audio_separation"
+              ? "Audio separation"
+              : job.type === "transcription"
+                ? "Speech recognition"
+                : job.type === "character_detection"
+                  ? "Character detection"
+                  : "Import & inspect"}
+          </strong>
           <span className="job-type">{job.type}</span>
         </div>
         <span className={`badge badge-${job.status}`}>{job.status}</span>

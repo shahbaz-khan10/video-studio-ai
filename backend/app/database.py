@@ -10,6 +10,10 @@ class Base(DeclarativeBase):
     pass
 
 
+_JOB_COLUMNS = {
+    "options_json": "JSON NOT NULL DEFAULT '{}'",
+}
+
 _VIDEO_COLUMNS = {
     "fps": "REAL",
     "frame_count": "INTEGER",
@@ -64,6 +68,10 @@ def _migrate_sqlite() -> None:
         for name, definition in _VIDEO_COLUMNS.items():
             if name not in existing:
                 connection.exec_driver_sql(f"ALTER TABLE videos ADD COLUMN {name} {definition}")
+        job_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(processing_jobs)")}
+        for name, definition in _JOB_COLUMNS.items():
+            if name not in job_columns:
+                connection.exec_driver_sql(f"ALTER TABLE processing_jobs ADD COLUMN {name} {definition}")
 
 
 def init_db() -> None:

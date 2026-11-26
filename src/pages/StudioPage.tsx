@@ -1,6 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { AudioMixerPanel } from "../components/AudioMixerPanel";
+import { AudioPreviewPanel } from "../components/AudioPreviewPanel";
+import { CharacterPanel } from "../components/CharacterPanel";
 import { JobProgress } from "../components/JobProgress";
 import { StatusBadge } from "../components/States";
+import { TranscriptPanel } from "../components/TranscriptPanel";
 import { UploadPanel } from "../components/UploadPanel";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { useAsync } from "../hooks/useAsync";
@@ -19,12 +23,6 @@ interface Drafts {
   hindi: string;
 }
 
-const CHARACTER_PLACEHOLDERS = [
-  { name: "Character 01", speaker: "Not detected", voice: "Unassigned" },
-  { name: "Character 02", speaker: "Not detected", voice: "Unassigned" },
-  { name: "Character 03", speaker: "Not detected", voice: "Unassigned" },
-];
-
 const TRACKS = [
   { name: "Original English", detail: "Source audio", kind: "source" },
   { name: "Urdu Dub", detail: "No generated audio", kind: "planned" },
@@ -36,7 +34,9 @@ const TRACKS = [
 export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [mixerPreviewActive, setMixerPreviewActive] = useState(false);
   const [drafts, setDrafts] = useState<Drafts>({ english: "", urdu: "", hindi: "" });
+  const videoRef = useRef<HTMLVideoElement>(null);
   const project = useAsync(() => api.getProject(projectId), [projectId]);
   const jobs = useAsync(() => api.listProjectJobs(projectId), [projectId]);
 
@@ -45,6 +45,10 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
     jobs.reload();
   }, [project.reload, jobs.reload]);
 
+  const updateDraft = (field: keyof Drafts, value: string) => {
+    setDrafts((current) => ({ ...current, [field]: value }));
+  };
+
   const onUploaded = useCallback(
     (result: UploadAccepted) => {
       setActiveJobId(result.job.id);
@@ -52,10 +56,6 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
     },
     [refreshAll],
   );
-
-  const updateDraft = (field: keyof Drafts, value: string) => {
-    setDrafts((current) => ({ ...current, [field]: value }));
-  };
 
   if (!project.data && project.loading) return <LoadingState label="Loading studio…" />;
   if (!project.data && project.error) return <ErrorState message={project.error} onRetry={project.reload} />;
@@ -152,6 +152,7 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
                 <span className="chip">Source</span>
               </div>
               <video
+                ref={videoRef}
                 controls
                 preload="metadata"
                 src={api.videoUrl(selectedVideo!)}
@@ -181,51 +182,57 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
               </div>
             </section>
 
+            <section className="studio-mixer-slot">
+              <AudioMixerPanel
+                key={selectedVideo!.id}
+                projectId={projectId}
+                videoId={selectedVideo!.id}
+                videoRef={videoRef}
+                onPreviewChange={setMixerPreviewActive}
+              />
+            </section>
+
+            <section className="studio-audio-slot">
+              <AudioPreviewPanel
+                videoId={selectedVideo!.id}
+                onJobStarted={(jobId) => setActiveJobId(jobId)}
+                previewActive={mixerPreviewActive}
+              />
+            </section>
+
             <section className="panel studio-transcript">
               <div className="panel-heading">
                 <div>
                   <h2>Transcript</h2>
-                  <p>Manual draft surface for dialogue review.</p>
+                  <p>Timestamped dialogue from open-source speech recognition.</p>
                 </div>
-                <span className="chip chip-planned">AI transcription · planned</span>
+                <span className="chip">Editable · synced</span>
               </div>
-              <p className="planned-note">
-                Speech recognition is not enabled yet. Text entered here stays in this browser session and is not sent
-                to the server.
-              </p>
-              <textarea
-                value={drafts.english}
-                onChange={(event) => updateDraft("english", event.target.value)}
-                placeholder="Draft source dialogue appears here…"
-                rows={9}
-                aria-label="Draft English transcript"
+              <TranscriptPanel
+                key={selectedVideo!.id}
+                videoId={selectedVideo!.id}
+                videoRef={videoRef}
+                previewActive={mixerPreviewActive}
+                onJobStarted={(jobId) => setActiveJobId(jobId)}
               />
-              <small className="draft-note">Local draft only · not saved</small>
             </section>
 
             <section className="panel studio-characters">
               <div className="panel-heading">
                 <div>
                   <h2>Character List</h2>
-                  <p>Speaker identity and voice assignment layout.</p>
+                  <p>Speaker turns, voice metrics and visible person candidates from detection.</p>
                 </div>
-                <span className="chip chip-planned">Detection · planned</span>
+                <span className="chip">Detection · live</span>
               </div>
-              <div className="character-table" role="table" aria-label="Character list layout">
-                <div className="character-row character-head" role="row">
-                  <span role="columnheader">Character</span>
-                  <span role="columnheader">Speaker identity</span>
-                  <span role="columnheader">Voice profile</span>
-                </div>
-                {CHARACTER_PLACEHOLDERS.map((character) => (
-                  <div className="character-row" role="row" key={character.name}>
-                    <span role="cell">{character.name}</span>
-                    <span role="cell">{character.speaker}</span>
-                    <span role="cell">{character.voice}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="planned-note">No characters detected yet. These rows show the intended columns only.</p>
+              <CharacterPanel
+                key={selectedVideo!.id}
+                projectId={projectId}
+                videoId={selectedVideo!.id}
+                videoRef={videoRef}
+                previewActive={mixerPreviewActive}
+                onJobStarted={(jobId) => setActiveJobId(jobId)}
+              />
             </section>
 
             <section className="panel studio-voices">
@@ -315,7 +322,7 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
               </div>
               <p className="planned-note">
                 Playback, clipping, mixing and export are not enabled in this phase. Lanes show the intended track
-                structure only.
+                structure only; generated stems are previewed in the Audio Stems panel above.
               </p>
               <div className="timeline-scroll">
                 <div className="timeline-ruler" aria-label="Timeline ruler">

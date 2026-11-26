@@ -64,6 +64,117 @@ export interface Job {
   steps: JobStep[];
 }
 
+export interface AudioStem {
+  role: string;
+  label: string;
+  status: string;
+  asset_id: string | null;
+  version: number | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  url: string | null;
+  download_url: string | null;
+  duration_ms: number | null;
+  sample_rate: number | null;
+  channels: number | null;
+  confidence: string | null;
+  validation: Record<string, unknown>;
+  comparison: Record<string, unknown>;
+}
+
+export interface AudioBundle {
+  video_id: string;
+  status: string;
+  job: Job | null;
+  source: AudioStem | null;
+  stems: Record<string, AudioStem>;
+  backend: string | null;
+  model: string | null;
+  confidence: string | null;
+  limitations: string[];
+  notes: string[];
+  comparison: Record<string, unknown>;
+}
+
+export interface TranscriptWord {
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  confidence: number | null;
+}
+
+export interface TranscriptSegment {
+  id: string;
+  position: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  confidence: number | null;
+  language: string | null;
+  speaker: string | null;
+  words: TranscriptWord[];
+  edited: boolean;
+  words_stale: boolean;
+}
+
+export interface Transcript {
+  metadata_json?: Record<string, unknown>;
+  id: string | null;
+  video_id: string;
+  job_id: string | null;
+  version: number;
+  status: string;
+  language: string;
+  source: string | null;
+  backend: string | null;
+  model: string | null;
+  word_timestamps: boolean;
+  revision: number;
+  segments: TranscriptSegment[];
+  limitations: string[];
+  notes: string[];
+  updated_at: string | null;
+}
+
+export interface TranscriptionRequest {
+  language: string;
+  prefer_dialogue_stem: boolean;
+  word_timestamps: boolean;
+}
+
+export interface TranscriptSegmentUpdate {
+  id?: string | null;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  speaker?: string | null;
+}
+
+export interface TranscriptUpdate {
+  revision?: number | null;
+  segments: TranscriptSegmentUpdate[];
+}
+
+export interface MixerTrackSettings {
+  volume: number;
+  muted: boolean;
+  solo: boolean;
+  enabled: boolean;
+}
+
+export interface MixerTrackState extends MixerTrackSettings {
+  role: string;
+  label: string;
+}
+
+export interface AudioMixSettings {
+  project_id: string;
+  master_volume: number;
+  preview_enabled: boolean;
+  tracks: Record<string, MixerTrackState>;
+  updated_at: string | null;
+}
+
 export interface ProjectSummary {
   id: string;
   name: string;
@@ -124,4 +235,143 @@ export interface ServerInfo {
   media_probe_available: boolean;
   ai_stages: string;
   capabilities: Record<string, boolean>;
+  audio?: Record<string, unknown>;
+  transcription?: Record<string, unknown>;
+  characters?: Record<string, unknown>;
+}
+
+export interface Character {
+  id: string;
+  project_id: string;
+  name: string;
+  source_label: string | null;
+  status: string;
+  confidence: number | null;
+  notes: string | null;
+  voice_characteristics: Record<string, unknown>;
+  dialogue_count: number;
+  scene_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpeakerTurn {
+  id: string;
+  video_id: string;
+  character_id: string | null;
+  label: string;
+  start_ms: number;
+  end_ms: number;
+  confidence: number | null;
+  overlap_possible: boolean;
+  reviewed: boolean;
+  assignment_source: string;
+  created_at: string;
+}
+
+export interface FaceTrack {
+  id: string;
+  video_id: string;
+  character_id: string | null;
+  label: string;
+  start_ms: number;
+  end_ms: number;
+  confidence: number | null;
+  representative_url: string | null;
+  sample_count: number;
+  created_at: string;
+}
+
+export interface VisualCandidate {
+  id: string;
+  video_id: string;
+  character_id: string | null;
+  face_track_id: string | null;
+  segment_id: string | null;
+  timestamp_ms: number;
+  bbox: number[];
+  confidence: number | null;
+  frame_url: string | null;
+  confirmed_character_id: string | null;
+  confirmed: boolean;
+  rejected: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface CharacterAssignment {
+  id: string;
+  character_id: string;
+  segment_id: string;
+  video_id: string;
+  source: string;
+  confidence: number | null;
+  reviewed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DialogueItem {
+  segment_id: string;
+  character_id: string | null;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  source: string;
+  confidence: number | null;
+  reviewed: boolean;
+}
+
+export interface CharacterBundle {
+  video_id: string;
+  status: string;
+  job: Job | null;
+  characters: Character[];
+  speaker_turns: SpeakerTurn[];
+  face_tracks: FaceTrack[];
+  visual_candidates: VisualCandidate[];
+  assignments: CharacterAssignment[];
+  dialogue: DialogueItem[];
+  limitations: string[];
+  notes: string[];
+  diarization: Record<string, unknown>;
+  vision: Record<string, unknown>;
+  metadata_json: Record<string, unknown>;
+  updated_at: string | null;
+}
+
+export interface CharacterDetectionRequest {
+  prefer_dialogue_stem?: boolean;
+  detect_faces?: boolean;
+  max_candidates?: number;
+}
+
+export interface CharacterUpdate {
+  name?: string | null;
+  notes?: string | null;
+  status?: string | null;
+}
+
+export interface CharacterMergeRequest {
+  character_ids: string[];
+  name?: string | null;
+}
+
+export interface CharacterSplitRequest {
+  name?: string | null;
+  segment_ids?: string[];
+  turn_ids?: string[];
+  face_track_ids?: string[];
+}
+
+export interface SegmentAssignmentUpdate {
+  character_id: string | null;
+  reviewed?: boolean;
+  confidence?: number | null;
+}
+
+export interface VisualCandidateUpdate {
+  confirmed_character_id?: string | null;
+  rejected?: boolean;
+  notes?: string | null;
 }

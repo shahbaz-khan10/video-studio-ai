@@ -20,6 +20,14 @@ export function formatDuration(ms: number | null): string {
   return hours ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
 }
 
+export function formatTimestamp(ms: number): string {
+  const safe = Math.max(0, Math.floor(ms));
+  const minutes = Math.floor(safe / 60000);
+  const seconds = Math.floor((safe % 60000) / 1000);
+  const millis = safe % 1000;
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+}
+
 export function formatDate(value: string): string {
   return new Date(value).toLocaleString(undefined, {
     year: "numeric",

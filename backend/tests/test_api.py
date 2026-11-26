@@ -29,7 +29,7 @@ def test_health_and_info(client):
     info = client.get("/api/v1/info")
     assert info.status_code == 200
     body = info.json()
-    assert body["ai_stages"] == "planned"
+    assert body["ai_stages"] == "partial"
     assert body["capabilities"]["video_upload"] is True
     assert body["capabilities"]["lip_sync"] is False
     assert body["max_upload_mb"] == 16

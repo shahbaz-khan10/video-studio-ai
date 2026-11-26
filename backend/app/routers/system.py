@@ -3,7 +3,12 @@ from fastapi import APIRouter
 from ..config import settings
 from ..database import engine
 from ..schemas import HealthOut, InfoOut
+from ..services.audio import demucs_available, production_info
+from ..services.characters import production_info as characters_info
+from ..services.diarization import production_info as diarization_info
 from ..services.media import probe_available
+from ..services.transcription import production_info as transcription_info
+from ..services.vision import production_info as vision_info
 
 router = APIRouter(tags=["system"])
 
@@ -28,13 +33,13 @@ def health() -> HealthOut:
 def info() -> InfoOut:
     return InfoOut(
         app=settings.app_name,
-        version="0.2.0-phase3",
+        version="0.4.0-phase7",
         max_upload_mb=settings.max_upload_mb,
         upload_chunk_mb=settings.upload_chunk_mb,
         thumbnail_count=settings.thumbnail_count,
         allowed_video_types=sorted(settings.allowed_content_types),
         media_probe_available=probe_available(),
-        ai_stages="planned",
+        ai_stages="partial",
         capabilities={
             "projects": True,
             "video_upload": True,
@@ -48,9 +53,35 @@ def info() -> InfoOut:
             "processing_status": True,
             "job_cancellation": True,
             "job_retry": True,
+            "audio_extraction": True,
+            "audio_separation": True,
+            "audio_preview": True,
+            "audio_validation": True,
+            "audio_cpu_processing": True,
+            "audio_mixer": True,
+            "dialogue_control": True,
+            "synchronized_mix_preview": True,
+            "project_mix_settings": True,
+            "audio_demucs_available": demucs_available(),
+            "audio_remote_backend_configured": bool(settings.remote_separation_url),
+            "speech_recognition": True,
+            "transcript_editor": True,
+            "word_timestamps": True,
+            "speaker_diarization": True,
+            "character_identities": True,
+            "visual_candidate_detection": True,
+            "manual_identity_review": True,
+            "face_recognition": False,
             "translation": False,
             "voice_generation": False,
             "lip_sync": False,
             "timeline_editor": False,
+        },
+        audio=production_info(),
+        transcription=transcription_info(),
+        characters={
+            **characters_info(),
+            "diarization": diarization_info(),
+            "vision": vision_info(),
         },
     )

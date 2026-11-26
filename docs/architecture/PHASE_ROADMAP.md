@@ -1,7 +1,7 @@
 # CINEMA AI DUB — Phase Roadmap
 
-**Status:** Phase 2 UI shell and Phase 3 video processing engine implemented; AI model integration still planned
-**Last updated:** 2026-11-23
+**Status:** Phase 2 UI, Phase 3 video engine, Phase 4 audio extraction/separation, Phase 5 original dialogue control, Phase 6 speech recognition and Phase 7 character detection implemented; Phases 8–16 still planned
+**Last updated:** 2026-11-26
 **Correction:** This roadmap now uses the master 16 phases supplied by the user. No phase was added, removed, renamed or reordered. Useful architecture decisions from the earlier provisional roadmap (dependency logic, gates, rationale, verification gates) are preserved below.
 
 ---
@@ -43,7 +43,7 @@ This list is the authoritative master plan. All other architecture documents mus
 | Cost exposure of cloud GPU / storage / bandwidth | Documented in `TECHNOLOGY_STACK.md` §6 |
 | All 25 required architecture areas | Covered (see mapping in `SYSTEM_ARCHITECTURE.md` §8) |
 | Required Mermaid diagrams | Included across the seven documents |
-| Implementation / UI / model integration | Phase 2 UI and Phase 3 engine implemented; AI model integration not started |
+| Implementation / UI / model integration | Phase 2 UI, Phase 3 engine, Phase 4 audio pipeline, Phase 5 dialogue/mixer control, Phase 6 speech recognition and Phase 7 character detection implemented; Phases 8–16 AI model integration not started |
 
 ---
 
@@ -201,4 +201,26 @@ Legend: arrows mean "must be usable before". Lip-sync output can be disabled per
 
 ## 9. Confirmation
 
-The exact 16 phases and their order remain authoritative. Phase 2 (Professional User Interface) and Phase 3 (Video Processing Engine) are implemented in this codebase. AI model integration begins at Phase 6 and remains blocked on the approvals above and explicit model licensing confirmation.
+The exact 16 phases and their order remain authoritative. Phase 2 (Professional User Interface), Phase 3 (Video Processing Engine), Phase 4 (Audio Extraction & Separation), Phase 5 (Original Dialogue Control), Phase 6 (Speech Recognition) and Phase 7 (Character Detection) are implemented in this codebase. Phases 8–16 are not started. The Phase 6 local engine uses open-source faster-whisper/CTranslate2 models on CPU; Phase 7 uses Silero VAD, SpeechBrain ECAPA-TDNN and scikit-learn clustering on CPU. Later AI stages remain blocked on the approvals above and explicit model licensing confirmation.
+
+---
+
+## 10. Phase 4 implementation note
+
+Phase 4 ships a CPU-feasible built-in spectral/envelope estimator, with optional Demucs and remote processing adapters selected through `SEPARATION_BACKEND`. The built-in stems are explicitly labelled approximate: dialogue is a band-limited estimate, music is a spectral estimate, and SFX/ambience are split by an RMS envelope heuristic; no stem is presented as validated clean speech. Extracted audio and stems are stored as separate versioned assets while the uploaded video remains byte-for-byte untouched. Demucs is optional, uses MIT-licensed code and MIT/CC-BY-NC-SA model weights depending on the selected model; the remote adapter is optional and requires a separately configured service. No browser GPU is required.
+
+---
+
+## 11. Phase 5 implementation note
+
+Phase 5 adds a per-project audio mixer over the Phase 4 stems: volume, mute, solo and enable controls for original dialogue, music, SFX and ambience, plus disabled placeholders for future Urdu and Hindi dub tracks. Mix preview plays the available stems against the original video and aligns them on play, pause, seek and playback-rate changes. Settings are stored in `audio_mixer_settings` and restored when the project is reopened. Dialogue removal acts on the separated dialogue stem only; because the built-in stem is not validated clean speech, the UI warns that leakage may remain. The uploaded video and extracted source audio are never modified.
+
+---
+
+## 12. Phase 7 implementation note
+
+Phase 7 adds local, open-source speaker diarization and reviewable character identities. The default CPU stack is Silero VAD (MIT) for speech start/stop, SpeechBrain ECAPA-TDNN `speechbrain/spkrec-ecapa-voxceleb` (Apache-2.0) for voice embeddings, and scikit-learn agglomerative clustering (BSD-3-Clause) for stable speaker groups. Audio is decoded with ffmpeg rather than torchaudio I/O so the stack works with recent torchaudio builds that require torchcodec. No Hugging Face token or paid API is required for the default path. pyannote.audio and WhisperX diarization were evaluated but are not the default because their gated models require Hugging Face account acceptance and a read token.
+
+Speaker turns, voice embeddings, transcript-segment assignments, visible-person candidates and approximate face tracks are persisted in project-scoped tables (`characters`, `speaker_turns`, `visual_candidates`, `face_tracks`, `character_assignments`). A character ID is stable across scenes when voice embeddings match above the configured threshold with a sufficient margin; close or ambiguous matches are marked for review rather than silently merged. Manual rename, merge, split, segment reassignment and visual-candidate confirmation are preserved across re-detection and re-transcription.
+
+Visual association samples sparse frames around dialogue and uses OpenCV Haar cascades only to propose *visible-person candidates*. It is not face recognition, does not claim real-world identity, and never assumes a visible person is the speaker; off-screen and voice-over speakers legitimately have zero candidates. All speaker-to-visible-person links require explicit human confirmation. Overlapping speech is approximated by flagging low-margin clusters for review rather than separating simultaneous transcripts; true multi-talker speech separation remains a later-phase capability. Optional remote/GPU backends exist only when explicitly configured with a URL; no free cloud GPU is assumed.

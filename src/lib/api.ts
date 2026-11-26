@@ -1,14 +1,27 @@
 import type {
+  AudioBundle,
+  AudioMixSettings,
+  Character,
+  CharacterBundle,
+  CharacterDetectionRequest,
+  CharacterMergeRequest,
+  CharacterSplitRequest,
+  CharacterUpdate,
   Health,
   Job,
   MediaAsset,
   Project,
   ProjectCreate,
   ProjectSummary,
+  SegmentAssignmentUpdate,
   ServerInfo,
+  Transcript,
+  TranscriptUpdate,
+  TranscriptionRequest,
   UploadAccepted,
   UploadSession,
   Video,
+  VisualCandidateUpdate,
 } from "../types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
@@ -82,8 +95,75 @@ export const api = {
     ),
   reprobeVideo: (videoId: string) =>
     request<Job>(`/api/v1/videos/${encodeURIComponent(videoId)}/reprobe`, { method: "POST" }),
+  getAudioBundle: (videoId: string) =>
+    request<AudioBundle>(`/api/v1/videos/${encodeURIComponent(videoId)}/audio`),
+  separateAudio: (videoId: string) =>
+    request<Job>(`/api/v1/videos/${encodeURIComponent(videoId)}/audio/separate`, { method: "POST" }),
+  getAudioMixSettings: (projectId: string) =>
+    request<AudioMixSettings>(`/api/v1/projects/${encodeURIComponent(projectId)}/audio-mix`),
+  saveAudioMixSettings: (projectId: string, payload: AudioMixSettings) =>
+    request<AudioMixSettings>(`/api/v1/projects/${encodeURIComponent(projectId)}/audio-mix`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  resetAudioMixSettings: (projectId: string) =>
+    request<AudioMixSettings>(`/api/v1/projects/${encodeURIComponent(projectId)}/audio-mix/reset`, {
+      method: "POST",
+    }),
+  getTranscript: (videoId: string) =>
+    request<Transcript>(`/api/v1/videos/${encodeURIComponent(videoId)}/transcript`),
+  startTranscription: (videoId: string, payload: TranscriptionRequest) =>
+    request<Job>(`/api/v1/videos/${encodeURIComponent(videoId)}/transcript/transcribe`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  saveTranscript: (videoId: string, payload: TranscriptUpdate) =>
+    request<Transcript>(`/api/v1/videos/${encodeURIComponent(videoId)}/transcript`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  getCharacterBundle: (videoId: string) =>
+    request<CharacterBundle>(`/api/v1/videos/${encodeURIComponent(videoId)}/characters`),
+  startCharacterDetection: (videoId: string, payload: CharacterDetectionRequest) =>
+    request<Job>(`/api/v1/videos/${encodeURIComponent(videoId)}/characters/detect`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateCharacter: (characterId: string, payload: CharacterUpdate) =>
+    request<Character>(`/api/v1/characters/${encodeURIComponent(characterId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  mergeCharacters: (characterId: string, payload: CharacterMergeRequest) =>
+    request<Character>(`/api/v1/characters/${encodeURIComponent(characterId)}/merge`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  splitCharacter: (characterId: string, payload: CharacterSplitRequest) =>
+    request<Character>(`/api/v1/characters/${encodeURIComponent(characterId)}/split`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  assignSegmentCharacter: (videoId: string, segmentId: string, payload: SegmentAssignmentUpdate) =>
+    request<CharacterBundle>(
+      `/api/v1/videos/${encodeURIComponent(videoId)}/segments/${encodeURIComponent(segmentId)}/character`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    ),
+  updateVisualCandidate: (candidateId: string, payload: VisualCandidateUpdate) =>
+    request<CharacterBundle>(`/api/v1/visual-candidates/${encodeURIComponent(candidateId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  listProjectCharacters: (projectId: string) =>
+    request<Character[]>(`/api/v1/projects/${encodeURIComponent(projectId)}/characters`),
   videoUrl: (video: Video) => `${API_BASE}${video.stream_url}`,
+  assetUrl: (url: string) => `${API_BASE}${url}`,
   mediaUrl: (asset: MediaAsset) => `${API_BASE}${asset.url}`,
+  mediaDownloadUrl: (asset: MediaAsset) => `${API_BASE}${asset.url}?download=1`,
+  audioDownloadUrl: (videoId: string, role: string) =>
+    `${API_BASE}/api/v1/videos/${encodeURIComponent(videoId)}/audio/stems/${encodeURIComponent(role)}/download`,
+  sourceAudioDownloadUrl: (videoId: string) =>
+    `${API_BASE}/api/v1/videos/${encodeURIComponent(videoId)}/audio/source/download`,
 };
 
 export interface VideoMetadata {

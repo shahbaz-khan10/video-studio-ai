@@ -4,7 +4,14 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import ProcessingJob
 from ..schemas import JobOut
-from ..services.jobs import cancel_job, prepare_retry_job, run_import_job
+from ..services.jobs import (
+    cancel_job,
+    prepare_retry_job,
+    run_audio_separation_job,
+    run_character_job,
+    run_import_job,
+    run_transcription_job,
+)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -32,5 +39,12 @@ def retry_processing_job(
     db: Session = Depends(get_db),
 ) -> JobOut:
     job, video_id, client_metadata = prepare_retry_job(db, job_id)
-    background.add_task(run_import_job, job.id, video_id, client_metadata)
+    if job.type == "audio_separation":
+        background.add_task(run_audio_separation_job, job.id, video_id)
+    elif job.type == "transcription":
+        background.add_task(run_transcription_job, job.id, video_id, client_metadata)
+    elif job.type == "character_detection":
+        background.add_task(run_character_job, job.id, video_id, client_metadata)
+    else:
+        background.add_task(run_import_job, job.id, video_id, client_metadata)
     return JobOut.model_validate(job)
