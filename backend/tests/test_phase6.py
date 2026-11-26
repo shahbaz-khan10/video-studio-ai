@@ -153,11 +153,11 @@ def start_transcription(client, video_id, **overrides):
 
 def test_info_reports_phase6_transcription_capabilities(client):
     body = client.get("/api/v1/info").json()
-    assert body["version"] == "0.4.0-phase7"
+    assert body["version"] == "0.5.0-phase8"
     assert body["ai_stages"] == "partial"
     for flag in ("speech_recognition", "transcript_editor", "word_timestamps", "job_cancellation", "job_retry"):
         assert body["capabilities"][flag] is True
-    assert body["capabilities"]["translation"] is False
+    assert body["capabilities"]["translation"] is True
     transcription = body["transcription"]
     assert set(transcription["supported_languages"]) == {"auto", "en", "hi", "ur"}
     assert transcription["browser_processing"] is False

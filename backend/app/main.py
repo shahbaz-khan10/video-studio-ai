@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import PROJECT_ROOT, settings
 from .database import init_db
-from .routers import characters, jobs, media, mixer, projects, system, transcripts, uploads, videos
+from .routers import characters, jobs, media, mixer, projects, system, transcripts, translations, uploads, videos
 from .services.media import AppError
 
 
@@ -22,7 +22,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.4.0-phase7",
+    version="0.5.0-phase8",
     description="Central API for browser-based AI dubbing project management.",
     lifespan=lifespan,
 )
@@ -44,6 +44,7 @@ app.include_router(media.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(transcripts.router, prefix="/api/v1")
 app.include_router(characters.router, prefix="/api/v1")
+app.include_router(translations.router, prefix="/api/v1")
 
 
 def error_response(status_code: int, code: str, message: str, details: object = None) -> JSONResponse:

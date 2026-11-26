@@ -375,3 +375,171 @@ export interface VisualCandidateUpdate {
   rejected?: boolean;
   notes?: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 8 — translation
+// ---------------------------------------------------------------------------
+
+export type TargetLanguage = "ur" | "hi";
+export type SpeechRegister = "auto" | "formal" | "neutral" | "informal" | "intimate";
+
+export interface QcFlag {
+  code: string;
+  severity: "error" | "warning" | "info";
+  message: string;
+}
+
+export interface DubbingFit {
+  status?: "ok" | "tight" | "long" | "empty";
+  duration_s?: number;
+  estimated_s?: number;
+  ratio?: number;
+  target_syllables?: number;
+  source_syllables?: number;
+  length_vs_source?: number | null;
+}
+
+export interface TranslationContextInfo {
+  scene_index?: number;
+  scene_note?: string | null;
+  register?: string;
+  register_reason?: string;
+  tone?: string;
+  humor?: boolean;
+  speaker?: { name?: string | null; label?: string | null; gender?: string; style?: string | null };
+  listener?: { name?: string | null; gender?: string; reason?: string | null };
+  relation?: string | null;
+  idioms?: { idiom: string; strategy: string; rendering: string }[];
+  locked_terms?: string[];
+  adjustments?: string[];
+  refined_from?: string;
+  memory?: boolean;
+  placeholder_fallback?: string[];
+  previous?: { speaker: string; text: string }[];
+  following?: { speaker: string; text: string }[];
+}
+
+export interface TranslationHistoryEntry {
+  text: string;
+  roman_text: string | null;
+  origin: string;
+  at: string;
+  reason: string;
+}
+
+export interface SegmentTranslationItem {
+  id: string;
+  language: TargetLanguage;
+  text: string;
+  roman_text: string | null;
+  origin: "ai" | "manual" | "memory";
+  roman_origin: string | null;
+  status: string;
+  ai_text: string | null;
+  ai_roman_text: string | null;
+  raw_mt: string | null;
+  suggestion_available: boolean;
+  source_text: string;
+  stale: boolean;
+  engine: string | null;
+  model: string | null;
+  qc_flags: QcFlag[];
+  fit: DubbingFit;
+  context: TranslationContextInfo;
+  history: TranslationHistoryEntry[];
+  revision: number;
+  error_message: string | null;
+  updated_at: string | null;
+}
+
+export interface TranslationLine {
+  segment_id: string;
+  position: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  speaker_label: string | null;
+  character_id: string | null;
+  character_name: string | null;
+  scene_index: number;
+  scene_start: boolean;
+  translations: Record<TargetLanguage, SegmentTranslationItem | null>;
+}
+
+export interface TranslationProfile {
+  character_id: string;
+  name: string;
+  status: string;
+  gender: "unknown" | "male" | "female";
+  register: SpeechRegister;
+  speaking_style: string | null;
+  name_ur: string | null;
+  name_hi: string | null;
+  name_roman: string | null;
+  names_auto: boolean;
+}
+
+export interface CharacterRelationshipItem {
+  id?: string;
+  speaker_character_id: string;
+  listener_character_id: string;
+  address_form: "formal" | "informal" | "intimate";
+  relation: string | null;
+}
+
+export interface GlossaryTerm {
+  id?: string;
+  source: string;
+  ur: string | null;
+  hi: string | null;
+  roman: string | null;
+  case_sensitive: boolean;
+  notes: string | null;
+}
+
+export interface TranslationEngineInfo {
+  backend: string;
+  model: string;
+  label: string;
+  license: string;
+  commercial_use: boolean | null;
+  device: string;
+  available: boolean;
+  cached: boolean;
+  loaded: boolean;
+  refiner_configured: boolean;
+  refiner_model: string | null;
+  requirements: { ram_cpu_gb: number; vram_gb: number; download_gb: number; params: string };
+  notes: string;
+}
+
+export interface TranslationSummary {
+  total: number;
+  translated: number;
+  manual: number;
+  stale: number;
+  flagged: number;
+  timing_long: number;
+}
+
+export interface TranslationBundle {
+  video_id: string;
+  project_id: string;
+  transcript_id: string | null;
+  transcript_revision: number | null;
+  engine: TranslationEngineInfo;
+  job: Job | null;
+  profiles: TranslationProfile[];
+  relationships: CharacterRelationshipItem[];
+  glossary: GlossaryTerm[];
+  scene_notes: Record<string, string>;
+  lines: TranslationLine[];
+  summary: Partial<Record<TargetLanguage, TranslationSummary>>;
+}
+
+export interface TranslateAllRequest {
+  languages: TargetLanguage[];
+  overwrite_manual?: boolean;
+  only_missing?: boolean;
+  segment_ids?: string[] | null;
+}

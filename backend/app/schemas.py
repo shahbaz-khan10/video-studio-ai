@@ -1,5 +1,6 @@
 from datetime import datetime
 from math import gcd
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -456,6 +457,7 @@ class InfoOut(BaseModel):
     audio: dict = Field(default_factory=dict)
     transcription: dict = Field(default_factory=dict)
     characters: dict = Field(default_factory=dict)
+    translation: dict = Field(default_factory=dict)
 
 
 class ErrorOut(BaseModel):
@@ -490,3 +492,72 @@ class UploadSessionOut(BaseModel):
     uploaded_chunks: list
     status: str
     expires_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — translation
+# ---------------------------------------------------------------------------
+
+TranslationLanguage = Literal["ur", "hi"]
+
+
+class TranslateAllRequest(BaseModel):
+    languages: list[TranslationLanguage] = Field(default_factory=lambda: ["ur", "hi"], min_length=1)
+    overwrite_manual: bool = False
+    only_missing: bool = False
+    segment_ids: list[str] | None = None
+
+
+class TranslateSegmentRequest(BaseModel):
+    languages: list[TranslationLanguage] = Field(default_factory=lambda: ["ur", "hi"], min_length=1)
+    force: bool = False
+
+
+class TranslationEdit(BaseModel):
+    text: str | None = Field(default=None, max_length=20000)
+    roman_text: str | None = Field(default=None, max_length=20000)
+    base_revision: int | None = None
+
+
+class TranslationRestore(BaseModel):
+    target: Literal["ai", "history"] = "ai"
+    index: int | None = None
+
+
+class TranslationProfileUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    gender: Literal["unknown", "male", "female"] = "unknown"
+    speech_register: Literal["auto", "formal", "neutral", "informal", "intimate"] = Field(default="auto", alias="register")
+    speaking_style: str | None = Field(default=None, max_length=2000)
+    name_ur: str | None = Field(default=None, max_length=160)
+    name_hi: str | None = Field(default=None, max_length=160)
+    name_roman: str | None = Field(default=None, max_length=160)
+
+
+class RelationshipIn(BaseModel):
+    speaker_character_id: str
+    listener_character_id: str
+    address_form: Literal["formal", "informal", "intimate"] = "formal"
+    relation: str | None = Field(default=None, max_length=120)
+
+
+class RelationshipsUpdate(BaseModel):
+    relationships: list[RelationshipIn] = Field(default_factory=list, max_length=500)
+
+
+class GlossaryTermIn(BaseModel):
+    source: str = Field(min_length=1, max_length=160)
+    ur: str | None = Field(default=None, max_length=240)
+    hi: str | None = Field(default=None, max_length=240)
+    roman: str | None = Field(default=None, max_length=240)
+    case_sensitive: bool = False
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class GlossaryUpdate(BaseModel):
+    terms: list[GlossaryTermIn] = Field(default_factory=list, max_length=2000)
+
+
+class SceneNoteUpdate(BaseModel):
+    note: str = Field(default="", max_length=4000)

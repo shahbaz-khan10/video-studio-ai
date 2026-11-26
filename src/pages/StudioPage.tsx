@@ -5,6 +5,7 @@ import { CharacterPanel } from "../components/CharacterPanel";
 import { JobProgress } from "../components/JobProgress";
 import { StatusBadge } from "../components/States";
 import { TranscriptPanel } from "../components/TranscriptPanel";
+import { TranslationPanel } from "../components/TranslationPanel";
 import { UploadPanel } from "../components/UploadPanel";
 import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { useAsync } from "../hooks/useAsync";
@@ -15,12 +16,6 @@ import type { Job, Project, UploadAccepted } from "../types";
 interface StudioPageProps {
   projectId: string;
   maxUploadMb: number;
-}
-
-interface Drafts {
-  english: string;
-  urdu: string;
-  hindi: string;
 }
 
 const TRACKS = [
@@ -35,7 +30,6 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [mixerPreviewActive, setMixerPreviewActive] = useState(false);
-  const [drafts, setDrafts] = useState<Drafts>({ english: "", urdu: "", hindi: "" });
   const videoRef = useRef<HTMLVideoElement>(null);
   const project = useAsync(() => api.getProject(projectId), [projectId]);
   const jobs = useAsync(() => api.listProjectJobs(projectId), [projectId]);
@@ -44,10 +38,6 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
     project.reload();
     jobs.reload();
   }, [project.reload, jobs.reload]);
-
-  const updateDraft = (field: keyof Drafts, value: string) => {
-    setDrafts((current) => ({ ...current, [field]: value }));
-  };
 
   const onUploaded = useCallback(
     (result: UploadAccepted) => {
@@ -274,42 +264,19 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
             <section className="panel studio-translation">
               <div className="panel-heading">
                 <div>
-                  <h2>Translation Panel</h2>
-                  <p>Editable source and target text drafts.</p>
+                  <h2>Translation Editor</h2>
+                  <p>Context-aware English → Urdu (with Roman Urdu) and Hindi, side by side. English stays unchanged.</p>
                 </div>
-                <span className="chip chip-planned">AI translation · planned</span>
+                <span className="chip">Open-source MT · editable</span>
               </div>
-              <div className="translation-grid">
-                <label className="translation-field">
-                  <span>English · source</span>
-                  <textarea
-                    value={drafts.english}
-                    onChange={(event) => updateDraft("english", event.target.value)}
-                    placeholder="English dialogue draft…"
-                    rows={7}
-                  />
-                </label>
-                <label className="translation-field">
-                  <span>Urdu · target</span>
-                  <textarea
-                    value={drafts.urdu}
-                    onChange={(event) => updateDraft("urdu", event.target.value)}
-                    placeholder="اردو ترجمہ یہاں لکھیں…"
-                    rows={7}
-                    dir="rtl"
-                  />
-                </label>
-                <label className="translation-field">
-                  <span>Hindi · target</span>
-                  <textarea
-                    value={drafts.hindi}
-                    onChange={(event) => updateDraft("hindi", event.target.value)}
-                    placeholder="हिंदी अनुवाद यहाँ लिखें…"
-                    rows={7}
-                  />
-                </label>
-              </div>
-              <small className="draft-note">Local draft only · not saved · no translation service is connected</small>
+              <TranslationPanel
+                key={selectedVideo!.id}
+                projectId={projectId}
+                videoId={selectedVideo!.id}
+                videoRef={videoRef}
+                previewActive={mixerPreviewActive}
+                onJobStarted={(jobId) => setActiveJobId(jobId)}
+              />
             </section>
 
             <section className="panel studio-timeline">

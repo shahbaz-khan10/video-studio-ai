@@ -8,6 +8,7 @@ from ..services.characters import production_info as characters_info
 from ..services.diarization import production_info as diarization_info
 from ..services.media import probe_available
 from ..services.transcription import production_info as transcription_info
+from ..services.translation_engine import engine_info as translation_info
 from ..services.vision import production_info as vision_info
 
 router = APIRouter(tags=["system"])
@@ -33,7 +34,7 @@ def health() -> HealthOut:
 def info() -> InfoOut:
     return InfoOut(
         app=settings.app_name,
-        version="0.4.0-phase7",
+        version="0.5.0-phase8",
         max_upload_mb=settings.max_upload_mb,
         upload_chunk_mb=settings.upload_chunk_mb,
         thumbnail_count=settings.thumbnail_count,
@@ -72,7 +73,11 @@ def info() -> InfoOut:
             "visual_candidate_detection": True,
             "manual_identity_review": True,
             "face_recognition": False,
-            "translation": False,
+            "translation": True,
+            "translation_editor": True,
+            "context_aware_translation": True,
+            "roman_urdu": True,
+            "translation_refiner_configured": bool(settings.translation_refiner_url),
             "voice_generation": False,
             "lip_sync": False,
             "timeline_editor": False,
@@ -84,4 +89,5 @@ def info() -> InfoOut:
             "diarization": diarization_info(),
             "vision": vision_info(),
         },
+        translation=translation_info(),
     )

@@ -3,6 +3,13 @@ import type {
   AudioMixSettings,
   Character,
   CharacterBundle,
+  CharacterRelationshipItem,
+  GlossaryTerm,
+  TargetLanguage,
+  TranslateAllRequest,
+  TranslationBundle,
+  TranslationLine,
+  TranslationProfile,
   CharacterDetectionRequest,
   CharacterMergeRequest,
   CharacterSplitRequest,
@@ -122,6 +129,54 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  getTranslations: (videoId: string) =>
+    request<TranslationBundle>(`/api/v1/videos/${encodeURIComponent(videoId)}/translations`),
+  translateAll: (videoId: string, payload: TranslateAllRequest) =>
+    request<Job>(`/api/v1/videos/${encodeURIComponent(videoId)}/translations/translate`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  translateSegment: (videoId: string, segmentId: string, languages: TargetLanguage[], force = false) =>
+    request<TranslationLine>(
+      `/api/v1/videos/${encodeURIComponent(videoId)}/translations/segments/${encodeURIComponent(segmentId)}/translate`,
+      { method: "POST", body: JSON.stringify({ languages, force }) },
+    ),
+  saveTranslation: (
+    segmentId: string,
+    language: TargetLanguage,
+    payload: { text?: string; roman_text?: string; base_revision?: number },
+  ) =>
+    request<TranslationLine>(`/api/v1/translations/${encodeURIComponent(segmentId)}/${language}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  restoreTranslation: (segmentId: string, language: TargetLanguage, target: "ai" | "history", index?: number) =>
+    request<TranslationLine>(`/api/v1/translations/${encodeURIComponent(segmentId)}/${language}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ target, index }),
+    }),
+  romanizeTranslation: (segmentId: string) =>
+    request<TranslationLine>(`/api/v1/translations/${encodeURIComponent(segmentId)}/ur/romanize`, { method: "POST" }),
+  saveTranslationProfile: (characterId: string, payload: Omit<TranslationProfile, "character_id" | "name" | "status" | "names_auto">) =>
+    request<TranslationProfile>(`/api/v1/characters/${encodeURIComponent(characterId)}/translation-profile`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  saveRelationships: (projectId: string, relationships: CharacterRelationshipItem[]) =>
+    request<CharacterRelationshipItem[]>(`/api/v1/projects/${encodeURIComponent(projectId)}/character-relationships`, {
+      method: "PUT",
+      body: JSON.stringify({ relationships }),
+    }),
+  saveGlossary: (projectId: string, terms: GlossaryTerm[]) =>
+    request<GlossaryTerm[]>(`/api/v1/projects/${encodeURIComponent(projectId)}/translation-glossary`, {
+      method: "PUT",
+      body: JSON.stringify({ terms }),
+    }),
+  saveSceneNote: (videoId: string, segmentId: string, note: string) =>
+    request<{ segment_id: string; note: string }>(
+      `/api/v1/videos/${encodeURIComponent(videoId)}/translation-scenes/${encodeURIComponent(segmentId)}`,
+      { method: "PUT", body: JSON.stringify({ note }) },
+    ),
   getCharacterBundle: (videoId: string) =>
     request<CharacterBundle>(`/api/v1/videos/${encodeURIComponent(videoId)}/characters`),
   startCharacterDetection: (videoId: string, payload: CharacterDetectionRequest) =>

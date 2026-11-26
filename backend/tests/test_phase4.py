@@ -141,7 +141,7 @@ def test_audio_extraction_formats_preserve_stream_properties(audio_video, tmp_pa
 
 def test_info_reports_phase4_capabilities(client):
     body = client.get("/api/v1/info").json()
-    assert body["version"] == "0.4.0-phase7"
+    assert body["version"] == "0.5.0-phase8"
     assert body["ai_stages"] == "partial"
     for flag in (
         "audio_extraction",
@@ -153,7 +153,7 @@ def test_info_reports_phase4_capabilities(client):
         "job_retry",
     ):
         assert body["capabilities"][flag] is True
-    assert body["capabilities"]["translation"] is False
+    assert body["capabilities"]["translation"] is True
     assert body["audio"]["cpu_fallback"] is True
     assert body["audio"]["browser_gpu_required"] is False
     assert {"wav", "flac", "mp3", "aac"} <= set(body["audio"]["extraction_formats"])

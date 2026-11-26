@@ -1,6 +1,6 @@
 # CINEMA AI DUB — Phase Roadmap
 
-**Status:** Phase 2 UI, Phase 3 video engine, Phase 4 audio extraction/separation, Phase 5 original dialogue control, Phase 6 speech recognition and Phase 7 character detection implemented; Phases 8–16 still planned
+**Status:** Phase 2 UI, Phase 3 video engine, Phase 4 audio extraction/separation, Phase 5 original dialogue control, Phase 6 speech recognition, Phase 7 character detection and Phase 8 context-aware translation implemented; Phases 9–16 still planned
 **Last updated:** 2026-11-26
 **Correction:** This roadmap now uses the master 16 phases supplied by the user. No phase was added, removed, renamed or reordered. Useful architecture decisions from the earlier provisional roadmap (dependency logic, gates, rationale, verification gates) are preserved below.
 
@@ -43,7 +43,7 @@ This list is the authoritative master plan. All other architecture documents mus
 | Cost exposure of cloud GPU / storage / bandwidth | Documented in `TECHNOLOGY_STACK.md` §6 |
 | All 25 required architecture areas | Covered (see mapping in `SYSTEM_ARCHITECTURE.md` §8) |
 | Required Mermaid diagrams | Included across the seven documents |
-| Implementation / UI / model integration | Phase 2 UI, Phase 3 engine, Phase 4 audio pipeline, Phase 5 dialogue/mixer control, Phase 6 speech recognition and Phase 7 character detection implemented; Phases 8–16 AI model integration not started |
+| Implementation / UI / model integration | Phase 2 UI, Phase 3 engine, Phase 4 audio pipeline, Phase 5 dialogue/mixer control, Phase 6 speech recognition, Phase 7 character detection and Phase 8 translation implemented; Phases 9–16 AI model integration not started |
 
 ---
 
@@ -201,7 +201,7 @@ Legend: arrows mean "must be usable before". Lip-sync output can be disabled per
 
 ## 9. Confirmation
 
-The exact 16 phases and their order remain authoritative. Phase 2 (Professional User Interface), Phase 3 (Video Processing Engine), Phase 4 (Audio Extraction & Separation), Phase 5 (Original Dialogue Control), Phase 6 (Speech Recognition) and Phase 7 (Character Detection) are implemented in this codebase. Phases 8–16 are not started. The Phase 6 local engine uses open-source faster-whisper/CTranslate2 models on CPU; Phase 7 uses Silero VAD, SpeechBrain ECAPA-TDNN and scikit-learn clustering on CPU. Later AI stages remain blocked on the approvals above and explicit model licensing confirmation.
+The exact 16 phases and their order remain authoritative. Phase 2 (Professional User Interface), Phase 3 (Video Processing Engine), Phase 4 (Audio Extraction & Separation), Phase 5 (Original Dialogue Control), Phase 6 (Speech Recognition), Phase 7 (Character Detection) and Phase 8 (Context-Aware Translation) are implemented in this codebase. Phases 9–16 are not started. The Phase 6 local engine uses open-source faster-whisper/CTranslate2 models on CPU; Phase 7 uses Silero VAD, SpeechBrain ECAPA-TDNN and scikit-learn clustering on CPU. Later AI stages remain blocked on the approvals above and explicit model licensing confirmation.
 
 ---
 
@@ -224,3 +224,33 @@ Phase 7 adds local, open-source speaker diarization and reviewable character ide
 Speaker turns, voice embeddings, transcript-segment assignments, visible-person candidates and approximate face tracks are persisted in project-scoped tables (`characters`, `speaker_turns`, `visual_candidates`, `face_tracks`, `character_assignments`). A character ID is stable across scenes when voice embeddings match above the configured threshold with a sufficient margin; close or ambiguous matches are marked for review rather than silently merged. Manual rename, merge, split, segment reassignment and visual-candidate confirmation are preserved across re-detection and re-transcription.
 
 Visual association samples sparse frames around dialogue and uses OpenCV Haar cascades only to propose *visible-person candidates*. It is not face recognition, does not claim real-world identity, and never assumes a visible person is the speaker; off-screen and voice-over speakers legitimately have zero candidates. All speaker-to-visible-person links require explicit human confirmation. Overlapping speech is approximated by flagging low-margin clusters for review rather than separating simultaneous transcripts; true multi-talker speech separation remains a later-phase capability. Optional remote/GPU backends exist only when explicitly configured with a URL; no free cloud GPU is assumed.
+
+## 13. Phase 8 implementation note
+
+Phase 8 translates the English transcript into Pakistani Urdu (Urdu script, plus editable Roman Urdu) and Hindi (Devanagari). The English transcript is never modified.
+
+**Models evaluated (licences and language support checked on Hugging Face, 2026-11-26)**
+
+| Model | Licence | Commercial | EN→UR / EN→HI | Size | Decision |
+|---|---|---|---|---|---|
+| `facebook/nllb-200-distilled-600M` | CC-BY-NC-4.0 | No | yes / yes (`urd_Arab`, `hin_Deva`) | 600M, 2.5 GB download | **Default** here (ungated, tested) |
+| `ai4bharat/indictrans2-en-indic-dist-200M` (1B variant too) | MIT | Yes | yes / yes | 200M, ~0.9 GB | Supported; auto-selected once downloaded. Gated: accept terms + `HF_TOKEN`. Not tested here (no token) |
+| `google/madlad400-3b-mt` | Apache-2.0 | Yes | yes / yes (`<2ur>`, `<2hi>`) | 3B, 11.8 GB | Supported, GPU/remote recommended. Not tested here |
+| `Helsinki-NLP/opus-mt-en-ur`, `opus-mt-en-hi` | Apache-2.0 | Yes | yes / yes | 77M each | **Rejected**: hallucinated a religious phrase for a placeholder and mangled names in testing |
+
+For commercial releases switch `TRANSLATION_BACKEND` to `indictrans2` or `madlad`; the UI shows the active licence.
+
+**Context layer (on top of sentence-level MT):** previous/next lines, dialogue-gap scenes plus user scene notes, Phase 7 character assignment, per-character profile (gender, default register, speaking style, fixed Urdu/Hindi/Roman name spellings), directed relationships (aap / tum / tu + relation), vocative and kinship cues for the addressee, idiom adaptation (native Urdu/Hindi idiom where one exists, otherwise the plain meaning — never literal), glossary and name locking via `N1X` placeholders (kept 8/8 by NLLB, `<N1>` was dropped in Hindi), rule-based register and gender agreement, punctuation in target script, humour detection for review, translation memory of the user's own corrections. An optional self-hosted open LLM (OpenAI-compatible endpoint, e.g. Ollama/vLLM) can rewrite each draft with the full context; it is off by default and never a paid API.
+
+**Measured requirements (this dev machine: 6-core CPU, 34 GB RAM, CPU-only torch)**
+
+| Setting | Peak RAM | Speed | 2-hour film (~1,500 lines, ~2,000 sentences) |
+|---|---|---|---|
+| NLLB-600M fp32 CPU (default) | 3.5 GB | 0.87 s / sentence, model load ~8 s | ~29 min per language |
+| NLLB-600M int8 CPU (`TRANSLATION_CPU_QUANTIZE=true`) | 4.1 GB peak during load | 0.22 s / sentence | ~7 min per language, slightly lower quality |
+| NLLB-600M fp16 GPU | ~2 GB VRAM (estimate, not measured) | — | — |
+| IndicTrans2 200M | ~2 GB RAM / ~1 GB VRAM (estimate) | — | — |
+| MADLAD-400 3B | ~13 GB RAM / ~7 GB VRAM (estimate) | — | — |
+
+Only one translation model is resident at a time, and idle Whisper / diarization models are released before it loads. Translation runs on the server (background job with progress, cancel, and retry that resumes where a failed run stopped); nothing heavy runs in the browser.
+

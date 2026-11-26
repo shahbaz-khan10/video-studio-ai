@@ -15,7 +15,7 @@ def create_project(client, name="Phase 5 film"):
 
 def test_info_reports_phase5_mixer_capabilities(client):
     body = client.get("/api/v1/info").json()
-    assert body["version"] == "0.4.0-phase7"
+    assert body["version"] == "0.5.0-phase8"
     assert body["ai_stages"] == "partial"
     for flag in (
         "audio_extraction",
@@ -27,7 +27,7 @@ def test_info_reports_phase5_mixer_capabilities(client):
         "project_mix_settings",
     ):
         assert body["capabilities"][flag] is True
-    for flag in ("translation", "voice_generation", "lip_sync", "timeline_editor"):
+    for flag in ("voice_generation", "lip_sync", "timeline_editor"):
         assert body["capabilities"][flag] is False
 
 

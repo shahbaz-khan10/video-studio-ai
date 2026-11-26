@@ -193,7 +193,7 @@ def start_detection(client, video_id, **overrides):
 
 def test_info_reports_phase7_identity_capabilities(client):
     body = client.get("/api/v1/info").json()
-    assert body["version"] == "0.4.0-phase7"
+    assert body["version"] == "0.5.0-phase8"
     for flag in (
         "speaker_diarization",
         "character_identities",

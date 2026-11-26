@@ -1350,6 +1350,13 @@ def prepare_retry_job(db: Session, job_id: str) -> tuple[ProcessingJob, str, dic
         context = job.options_json or {}
         retry = create_character_job(db, video.project_id, video.id, context)
         return retry, video.id, context
+    if job.type == "translation":
+        from .translation import create_translation_job
+
+        # Resume: lines already finished by the failed run are not redone.
+        context = {**(job.options_json or {}), "resume_from_job_id": job.id}
+        retry = create_translation_job(db, video, context)
+        return retry, video.id, context
     client_metadata = (video.metadata_json or {}).get("browser") or {}
     retry = create_import_job(db, video.project_id, video.id, job.type)
     return retry, video.id, client_metadata

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import ProcessingJob
 from ..schemas import JobOut
+from ..services.translation import run_translation_job
 from ..services.jobs import (
     cancel_job,
     prepare_retry_job,
@@ -45,6 +46,8 @@ def retry_processing_job(
         background.add_task(run_transcription_job, job.id, video_id, client_metadata)
     elif job.type == "character_detection":
         background.add_task(run_character_job, job.id, video_id, client_metadata)
+    elif job.type == "translation":
+        background.add_task(run_translation_job, job.id, video_id, client_metadata)
     else:
         background.add_task(run_import_job, job.id, video_id, client_metadata)
     return JobOut.model_validate(job)
