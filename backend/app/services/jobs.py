@@ -1364,6 +1364,18 @@ def prepare_retry_job(db: Session, job_id: str) -> tuple[ProcessingJob, str, dic
         context = {**(job.options_json or {}), "resume_from_job_id": job.id}
         retry = create_dub_job(db, video, context)
         return retry, video.id, context
+    if job.type == "dub_timing":
+        from .dub_timing import create_timing_job
+
+        context = {**(job.options_json or {}), "resume_from_job_id": job.id}
+        retry = create_timing_job(db, video, context)
+        return retry, video.id, context
+    if job.type == "mix_render":
+        from .mix_studio import create_render_job
+
+        context = job.options_json or {}
+        retry = create_render_job(db, video, context.get("target", "ur"), context.get("format", "wav"))
+        return retry, video.id, retry.options_json
     client_metadata = (video.metadata_json or {}).get("browser") or {}
     retry = create_import_job(db, video.project_id, video.id, job.type)
     return retry, video.id, client_metadata

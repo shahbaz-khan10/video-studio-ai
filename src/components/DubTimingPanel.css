@@ -1,0 +1,385 @@
+/* Phase 11 — dialogue timing panel */
+
+.studio-dub-timing {
+  grid-column: 1 / -1;
+}
+
+.timing-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.timing-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.timing-toolbar select,
+.timing-viewport-controls select {
+  width: auto;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.timing-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dub-bad {
+  color: #fda4af;
+}
+
+.timing-viewport {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  min-width: 0;
+}
+
+.timing-viewport-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.timing-viewport-controls input[type="range"] {
+  flex: 1 1 200px;
+  accent-color: var(--primary);
+}
+
+.timing-ruler {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  height: 20px;
+  cursor: pointer;
+}
+
+.timing-ruler-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.timing-ruler-body {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+}
+
+.timing-ruler-body span {
+  position: absolute;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timing-ruler-body span:first-child {
+  transform: none;
+}
+
+.timing-ruler-body span:last-child {
+  transform: translateX(-100%);
+}
+
+.timing-lanes {
+  position: relative;
+  display: grid;
+  gap: 4px;
+}
+
+.timing-lane {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  min-height: 56px;
+}
+
+.timing-lane-label {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.timing-lane-label small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.timing-lane-body {
+  position: relative;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(8, 13, 26, 0.7);
+}
+
+.timing-wave {
+  position: absolute;
+  inset: 3px 0;
+  width: 100%;
+}
+
+.timing-window,
+.timing-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  min-width: 4px;
+  padding: 0 4px;
+  overflow: hidden;
+  border-radius: 5px;
+  color: var(--text);
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.timing-window {
+  border: 1px dashed rgba(196, 181, 253, 0.6);
+  background: rgba(124, 92, 255, 0.1);
+}
+
+.timing-window.has-overlap {
+  border-color: rgba(251, 191, 36, 0.8);
+}
+
+.timing-block {
+  border: 1px solid rgba(52, 211, 153, 0.8);
+  background: rgba(52, 211, 153, 0.18);
+  touch-action: none;
+}
+
+.timing-lane:not(.is-editable) .timing-block {
+  opacity: 0.6;
+}
+
+.timing-block.timing-fitted_fast {
+  border-color: rgba(251, 191, 36, 0.9);
+  background: rgba(251, 191, 36, 0.2);
+}
+
+.timing-block.timing-needs_attention,
+.timing-block.timing-failed {
+  border-color: rgba(251, 113, 133, 0.95);
+  background: rgba(251, 113, 133, 0.22);
+}
+
+.timing-block.timing-stale {
+  border-style: dashed;
+}
+
+.timing-block.is-approved {
+  box-shadow: inset 0 0 0 2px rgba(52, 211, 153, 0.7);
+  cursor: default;
+}
+
+.timing-window.is-selected,
+.timing-block.is-selected {
+  outline: 2px solid #fff;
+  outline-offset: -1px;
+}
+
+.timing-playhead,
+.timing-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.timing-playhead {
+  border-left: 2px solid #f472b6;
+}
+
+.timing-marker {
+  border-left: 1px dashed rgba(255, 255, 255, 0.55);
+}
+
+.timing-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.timing-list {
+  display: grid;
+  gap: 4px;
+  max-height: 460px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.timing-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(16, 24, 39, 0.6);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.timing-row.is-selected {
+  border-color: var(--primary);
+}
+
+.timing-overlap-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.timing-badge-fitted {
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+  text-transform: none;
+}
+
+.timing-badge-fitted_fast,
+.timing-badge-stale {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+  text-transform: none;
+}
+
+.timing-badge-needs_attention,
+.timing-badge-failed {
+  background: rgba(251, 113, 133, 0.14);
+  color: #fda4af;
+  text-transform: none;
+}
+
+.timing-badge-pending,
+.timing-badge-no_audio {
+  text-transform: none;
+}
+
+.timing-inspector {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  min-width: 0;
+}
+
+.timing-inspector h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.timing-inspector p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.timing-inspector audio {
+  width: 100%;
+  height: 34px;
+}
+
+.timing-facts {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.timing-facts dt {
+  color: var(--muted);
+}
+
+.timing-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.timing-suggestions {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed rgba(251, 191, 36, 0.45);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.timing-suggestions > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.timing-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.timing-form label {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.timing-form input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+@media (max-width: 1000px) {
+  .timing-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .timing-lane,
+  .timing-ruler {
+    grid-template-columns: 70px minmax(0, 1fr);
+  }
+
+  .timing-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -24,6 +24,8 @@ from .routers import (
     voice_profiles,
 )
 from .routers import dub_audio  # Phase 10
+from .routers import dub_timing  # Phase 11
+from .routers import mix_studio  # Phase 12
 from .services.media import AppError
 
 
@@ -60,6 +62,8 @@ app.include_router(characters.router, prefix="/api/v1")
 app.include_router(translations.router, prefix="/api/v1")
 app.include_router(voice_profiles.router, prefix="/api/v1")
 app.include_router(dub_audio.router, prefix="/api/v1")  # Phase 10 — voice generation
+app.include_router(dub_timing.router, prefix="/api/v1")  # Phase 11 — dialogue timing
+app.include_router(mix_studio.router, prefix="/api/v1")  # Phase 12 — mixing studio
 
 
 def error_response(status_code: int, code: str, message: str, details: object = None) -> JSONResponse:

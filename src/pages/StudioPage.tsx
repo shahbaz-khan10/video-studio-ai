@@ -3,6 +3,8 @@ import { AudioMixerPanel } from "../components/AudioMixerPanel";
 import { AudioPreviewPanel } from "../components/AudioPreviewPanel";
 import { CharacterPanel } from "../components/CharacterPanel";
 import { DubAudioPanel } from "../components/DubAudioPanel";
+import { DubTimingPanel } from "../components/DubTimingPanel";
+import { MixStudioPanel } from "../components/MixStudioPanel";
 import { JobProgress } from "../components/JobProgress";
 import { StatusBadge } from "../components/States";
 import { TranscriptPanel } from "../components/TranscriptPanel";
@@ -265,6 +267,28 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
                 <span className="chip">AI text-to-speech</span>
               </div>
               <DubAudioPanel key={selectedVideo!.id} videoId={selectedVideo!.id} onJobStarted={(jobId) => setActiveJobId(jobId)} />
+            </section>
+
+            <section className="panel studio-dub-timing">
+              <div className="panel-heading">
+                <div>
+                  <h2>Dialogue Timing</h2>
+                  <p>Fit dubbed lines to the original timestamps, adjust them on the timeline and preview them with the video.</p>
+                </div>
+                <span className="chip">Audio sync</span>
+              </div>
+              <DubTimingPanel key={selectedVideo!.id} videoId={selectedVideo!.id} videoRef={videoRef} onJobStarted={(jobId) => setActiveJobId(jobId)} />
+            </section>
+
+            <section className="panel studio-mix-studio">
+              <div className="panel-heading">
+                <div>
+                  <h2>Mixing Studio</h2>
+                  <p>Multitrack mix of the original stems and the Urdu / Hindi dialogue tracks, with effects, presets and rendering.</p>
+                </div>
+                <span className="chip">Mix · render</span>
+              </div>
+              <MixStudioPanel key={selectedVideo!.id} videoId={selectedVideo!.id} videoRef={videoRef} onJobStarted={(jobId) => setActiveJobId(jobId)} />
             </section>
 
             <section className="panel studio-timeline">

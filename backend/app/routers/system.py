@@ -89,6 +89,10 @@ def info() -> InfoOut:
             "voice_consent_controls": True,
             "voice_generation": True,  # Phase 10
             "dub_audio_batch_generation": True,
+            "dialogue_timing": True,  # Phase 11
+            "dubbed_video_preview": True,
+            "mixing_studio": True,  # Phase 12
+            "mix_rendering": True,
             "lip_sync": False,
             "timeline_editor": False,
         },

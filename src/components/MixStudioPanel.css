@@ -1,0 +1,290 @@
+/* Phase 12 — mixing studio */
+
+.studio-mix-studio {
+  grid-column: 1 / -1;
+}
+
+.mix-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mix-toolbar,
+.mix-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mix-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mix-note em,
+.mix-tag {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.mix-exact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.mix-exact audio {
+  flex: 1 1 260px;
+  height: 34px;
+}
+
+.mix-strips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.mix-strip {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  min-width: 0;
+}
+
+.mix-strip.is-audible {
+  border-color: rgba(52, 211, 153, 0.55);
+}
+
+.mix-strip.is-unavailable {
+  opacity: 0.6;
+}
+
+.mix-strip header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mix-strip small {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.mix-master {
+  border-color: rgba(124, 92, 255, 0.5);
+}
+
+.mix-master select,
+.mix-row select,
+.mix-row input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.mix-row input {
+  flex: 1 1 140px;
+}
+
+.mix-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.mix-toggle {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mix-toggle.is-on {
+  border-color: rgba(52, 211, 153, 0.7);
+  background: rgba(52, 211, 153, 0.18);
+  color: #6ee7b7;
+}
+
+.mix-toggle.mute.is-on {
+  border-color: rgba(251, 113, 133, 0.8);
+  background: rgba(251, 113, 133, 0.2);
+  color: #fda4af;
+}
+
+.mix-toggle.solo.is-on {
+  border-color: rgba(251, 191, 36, 0.8);
+  background: rgba(251, 191, 36, 0.2);
+  color: #fcd34d;
+}
+
+.mix-toggle:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.mix-slider {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mix-slider span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mix-slider b {
+  margin-left: auto;
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mix-slider input {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.mix-slider.is-disabled {
+  opacity: 0.5;
+}
+
+.mix-effects {
+  display: grid;
+  gap: 8px;
+}
+
+.mix-effects fieldset {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mix-effects legend {
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.mix-effects audio {
+  width: 100%;
+  height: 32px;
+}
+
+.mix-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.mix-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+  min-width: 0;
+}
+
+.mix-box h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mix-list,
+.mix-renders {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mix-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.mix-list li span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.mix-renders li {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mix-renders li > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mix-renders audio {
+  width: 100%;
+  height: 34px;
+}
+
+@media (max-width: 900px) {
+  .mix-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.mix-strip .dub-check {
+  white-space: normal;
+  align-items: flex-start;
+}
+
+.mix-strip .dub-check input {
+  margin-top: 2px;
+}
+
+.mix-master {
+  grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+  .mix-master {
+    grid-column: auto;
+  }
+}
