@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import re
 from pathlib import Path
 
@@ -176,8 +178,12 @@ class LipSyncUpdate(BaseModel):
 
 
 class ExportRequest(BaseModel):
-    mode: str = "multitrack"  # multitrack | separate_language
-    container: str = "mkv"
+    mode: Literal["multitrack", "separate_language"] = "multitrack"
+    container: Literal["mkv", "mp4", "mov"] = "mkv"  # validated: it becomes part of the output filename
+    # Lip sync: separate_language exports use each language's lip-synced picture when
+    # results exist; a multitrack file has ONE picture, so pick at most one language for it.
+    use_lipsync: bool = True
+    multitrack_lipsync_language: str | None = None
     languages: list[str] | None = None
     include_beds: bool = True
     include_original_english: bool | None = None
@@ -263,6 +269,9 @@ def save(timeline_id: str, db: Session = Depends(get_db)) -> dict:
 
 @router.post("/timeline/{timeline_id}/clips", status_code=201)
 def add_clip(timeline_id: str, payload: ClipAdd, db: Session = Depends(get_db)) -> dict:
+    timeline = _timeline(db, timeline_id)
+    _owned_key(payload.storage_key, timeline.project_id)
+    service.check_clip_refs(db, timeline, payload.track_id, payload.external_audio_id, payload.character_id)
     clip = service.add_clip(
         db, timeline_id, payload.track_id, source_type=payload.source_type, storage_key=payload.storage_key, name=payload.name,
         start_ms=payload.start_ms, duration_ms=payload.duration_ms, source_in_ms=payload.source_in_ms,
@@ -454,9 +463,19 @@ def list_lipsync(video_id: str, language: str | None = None, db: Session = Depen
     return service.list_lipsync(db, video_id, language)
 
 
+def _owned_key(key: str | None, project_id: str) -> None:
+    from ..services.storage import key_belongs_to_project
+
+    if key is None:
+        return
+    if not key_belongs_to_project(key, project_id) or not storage.absolute_path(key).is_file():
+        raise AppError(422, "INVALID_STORAGE_KEY", "That file does not belong to this project.")
+
+
 @router.patch("/lip-sync-segments/{segment_id}")
 def update_lipsync(segment_id: str, payload: LipSyncUpdate, db: Session = Depends(get_db)) -> dict:
     seg = service.get_lipsync(db, segment_id)
+    _owned_key(payload.output_storage_key, seg.project_id)
     if payload.regenerated:
         seg = service.mark_lip_sync_regenerated(db, segment_id, payload.output_storage_key)
         return service.serialize_lipsync(db, seg)
@@ -519,10 +538,25 @@ def export_outputs(job_id: str, db: Session = Depends(get_db)) -> dict:
     return {"job_id": job_id, "status": job.status, "outputs": outputs}
 
 
-@router.get("/timeline-exports/file")
-def export_file(key: str = Query(...), db: Session = Depends(get_db)) -> Response:
+@router.get("/jobs/{job_id}/timeline-export/files/{index}")
+def export_file(job_id: str, index: int, request: Request, db: Session = Depends(get_db)) -> Response:
+    """Download an export by job + position (never by a client-supplied path)."""
+    from ..models import ProcessingJob
+    from ..services.storage import key_belongs_to_project
+
+    job = db.get(ProcessingJob, job_id)
+    if job is None or job.type != "timeline_export":
+        raise AppError(404, "NOT_FOUND", "Export not found.")
+    outputs = (job.options_json or {}).get("outputs", [])
+    if index < 0 or index >= len(outputs):
+        raise AppError(404, "NOT_FOUND", "Export file not found.")
+    key = outputs[index].get("storage_key", "")
+    if not key_belongs_to_project(key, job.project_id):
+        raise AppError(404, "NOT_FOUND", "Export file not found.")
     path = storage.absolute_path(key)
     if not path.is_file():
         raise AppError(410, "FILE_MISSING", "Exported file is missing.")
-    media = "video/x-matroska" if key.endswith(".mkv") else "video/mp4"
-    return FileResponse(path, media_type=media, filename=path.name)
+    media = {".mkv": "video/x-matroska", ".mp4": "video/mp4", ".mov": "video/quicktime"}.get(path.suffix, "application/octet-stream")
+    if request.query_params.get("download") in {"1", "true"}:
+        return FileResponse(path, media_type=media, filename=path.name)
+    return _stream_file(path, media, request)

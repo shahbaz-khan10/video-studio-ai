@@ -37,7 +37,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Header
 from fastapi.responses import Response
 
 REPO = Path(os.environ.get("LATENTSYNC_REPO", "."))
@@ -82,9 +82,13 @@ async def lipsync(
     face_boxes: str = Form(...),
     fps: str = Form(...),
     model: str = Form("latentsync-1.5"),
-    authorization: str | None = None,
+    authorization: str | None = Header(default=None),
 ):
-    if TOKEN and authorization != f"Bearer {TOKEN}":
+    import hmac
+
+    # The token travels in the Authorization header (it used to be read from the query
+    # string by mistake, so every authenticated request was rejected).
+    if TOKEN and not hmac.compare_digest((authorization or "").encode(), f"Bearer {TOKEN}".encode()):
         raise HTTPException(status_code=401, detail="Bad token")
     boxes = json.loads(face_boxes)
     with tempfile.TemporaryDirectory(prefix="ls-") as tmp:

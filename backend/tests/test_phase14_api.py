@@ -231,7 +231,7 @@ def test_export_render_multitrack(client, tmp_path):
     out = client.get(f"/api/v1/jobs/{job_id}/timeline-export").json()
     assert out["outputs"], "export produced outputs"
     key = out["outputs"][0]["storage_key"]
-    r = client.get("/api/v1/timeline-exports/file", params={"key": key})
+    r = client.get(f"/api/v1/jobs/{job_id}/timeline-export/files/0", params={"download": 1})
     assert r.status_code == 200
     assert len(r.content) > 0
     # verify it's a real video with audio streams

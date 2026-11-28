@@ -1,3 +1,4 @@
+import { AuthGate } from "./components/AuthGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Layout } from "./components/Layout";
 import { useAsync } from "./hooks/useAsync";
@@ -15,6 +16,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <AuthGate>
       <Layout info={info.data} databaseStatus={health.data?.database ?? null}>
         {route.name === "dashboard" && <DashboardPage />}
         {route.name === "projects" && <ProjectsPage />}
@@ -25,6 +27,7 @@ export default function App() {
           <StudioPage projectId={route.id} maxUploadMb={info.data?.max_upload_mb ?? 2048} />
         )}
       </Layout>
+      </AuthGate>
     </ErrorBoundary>
   );
 }

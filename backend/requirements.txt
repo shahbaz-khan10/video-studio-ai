@@ -27,3 +27,9 @@ opencv-python-headless>=4.10,<5
 # NLLB-200 600M (CC-BY-NC-4.0), IndicTrans2 (MIT, gated), MADLAD-400 (Apache-2.0).
 transformers>=5,<6
 sentencepiece>=0.2,<1
+# Phase 13 — lip sync (Wav2Lip) imports scipy directly (do not rely on scikit-learn pulling it in).
+scipy>=1.11,<2
+# Phase 15/16 — resource monitoring (memory/CPU snapshots, worker health).
+psutil>=5.9,<8
+# Phase 16 — the real-browser UI smoke test talks to Chrome over the DevTools protocol.
+websockets>=12,<18

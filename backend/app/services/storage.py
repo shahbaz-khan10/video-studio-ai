@@ -5,6 +5,17 @@ from pathlib import Path
 from ..config import settings
 
 
+class InvalidStorageKey(ValueError):
+    """A storage key that escapes the artifacts root (path traversal) or is malformed."""
+
+
+def key_belongs_to_project(storage_key: str | None, project_id: str) -> bool:
+    """Every artifact lives under projects/<project_id>/; used to reject client-supplied keys."""
+    if not storage_key or ".." in storage_key.replace("\\", "/").split("/"):
+        return False
+    return storage_key.replace("\\", "/").startswith(f"projects/{project_id}/")
+
+
 class StorageService:
     def __init__(self, root: Path | None = None) -> None:
         self.root = root or (settings.data_dir / "artifacts")
@@ -32,9 +43,11 @@ class StorageService:
         return f"{self.upload_dir_key(project_id, session_id)}/parts/{index:06d}.part"
 
     def absolute_path(self, storage_key: str) -> Path:
+        if not storage_key or "\x00" in storage_key:
+            raise InvalidStorageKey("Invalid storage key")
         candidate = (self.root / storage_key).resolve()
         if not candidate.is_relative_to(self.root.resolve()):
-            raise ValueError("Invalid storage key")
+            raise InvalidStorageKey("Invalid storage key")
         return candidate
 
     def save(self, storage_key: str, source_path: Path) -> None:

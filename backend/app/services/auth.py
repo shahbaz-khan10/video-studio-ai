@@ -37,7 +37,12 @@ class AuthSettings(BaseSettings):
     secret_key: str | None = None
     session_hours: float = 168.0
     allow_registration: bool = False  # the very first account can always be created (becomes admin)
-    cookie_secure: bool = False  # set true behind HTTPS
+    cookie_secure: bool | None = None  # default: true when ENVIRONMENT=production (HTTPS)
+    # Required to create the first (admin) account when ENVIRONMENT=production, so whoever
+    # reaches a fresh deployment first cannot claim it. Or use: python -m app.manage create-admin
+    bootstrap_token: str | None = None
+    login_max_failures: int = 8
+    login_window_s: int = 900
     allow_insecure_production: bool = False
 
 
@@ -45,7 +50,8 @@ auth_settings = AuthSettings()
 COOKIE = "cinema_session"
 PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/status", "/api/v1/auth/register"}
 ADMIN_PREFIXES = ("/api/v1/processing/workers", "/api/v1/processing/resources", "/api/v1/processing/models",
-                  "/api/v1/processing/cleanup", "/api/v1/processing/recover", "/api/v1/processing/status")
+                  "/api/v1/processing/cleanup", "/api/v1/processing/recover", "/api/v1/processing/status",
+                  "/api/v1/processing/remote")
 UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
@@ -191,19 +197,102 @@ def accessible_project_ids(db, user: CurrentUser) -> set[str] | None:
 
 
 def authorize_path(path: str, user: CurrentUser) -> bool:
-    if user.is_admin:
-        return True
     parts = path.split("/")
     ids = [(parts[i - 1] if i else None, part) for i, part in enumerate(parts) if UUID_RE.fullmatch(part)]
-    if not ids:
+    return authorize_ids(ids, [], user)
+
+
+KEY_PROJECT_RE = re.compile(r"^projects[/\\]([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})[/\\]")
+
+
+def _hint_for_key(name: str | None) -> str | None:
+    """profile_id -> profiles, clip_ids -> clips, project_id -> projects ..."""
+    if not name:
+        return None
+    base = name[:-4] if name.endswith("_ids") else name[:-3] if name.endswith("_id") else name
+    return base if base.endswith("s") else f"{base}s"
+
+
+def collect_references(value, name: str | None = None, ids=None, keys=None, depth: int = 0):
+    """Find every UUID and every projects/<id>/ storage key in a query/JSON payload."""
+    ids = [] if ids is None else ids
+    keys = [] if keys is None else keys
+    if depth > 8 or len(ids) > 500:
+        return ids, keys
+    if isinstance(value, dict):
+        for key, item in value.items():
+            collect_references(item, str(key), ids, keys, depth + 1)
+    elif isinstance(value, list):
+        for item in value:
+            collect_references(item, name, ids, keys, depth + 1)
+    elif isinstance(value, str):
+        lowered = value.strip().lower()
+        if UUID_RE.fullmatch(lowered):
+            ids.append((_hint_for_key(name), lowered))
+        match = KEY_PROJECT_RE.match(lowered)
+        if match:
+            keys.append(match.group(1))
+    return ids, keys
+
+
+def authorize_ids(ids: list, key_projects: list, user: CurrentUser) -> bool:
+    """Every referenced id/storage key must belong to one of the user's projects.
+
+    Unknown ids fall through to the route (which answers 404); storage keys must
+    name a project the user can access.
+    """
+    if user.is_admin or (not ids and not key_projects):
         return True
     with SessionLocal() as db:
         allowed = accessible_project_ids(db, user) or set()
+        for project in key_projects:
+            if project not in allowed:
+                return False
         for hint, ident in ids:
             project = project_of(db, hint, ident)
             if project is not None and project not in allowed:
                 return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Login throttling (per client address + email, in memory)
+# ---------------------------------------------------------------------------
+
+_FAILURES: dict[str, list[float]] = {}
+
+
+def _throttle_key(address: str | None, email: str) -> str:
+    return f"{address or '?'}|{email.strip().lower()}"
+
+
+def login_blocked(address: str | None, email: str) -> int:
+    """Seconds until another attempt is allowed (0 = allowed)."""
+    now = time.time()
+    window = auth_settings.login_window_s
+    attempts = [t for t in _FAILURES.get(_throttle_key(address, email), []) if now - t < window]
+    _FAILURES[_throttle_key(address, email)] = attempts
+    if len(attempts) >= auth_settings.login_max_failures:
+        return int(window - (now - attempts[0])) + 1
+    return 0
+
+
+def record_login_failure(address: str | None, email: str) -> None:
+    _FAILURES.setdefault(_throttle_key(address, email), []).append(time.time())
+
+
+def clear_login_failures(address: str | None, email: str) -> None:
+    _FAILURES.pop(_throttle_key(address, email), None)
+
+
+def cookie_secure() -> bool:
+    if auth_settings.cookie_secure is not None:
+        return bool(auth_settings.cookie_secure)
+    return settings.environment.lower() == "production"
+
+
+def bootstrap_required() -> bool:
+    return settings.environment.lower() == "production" or bool(auth_settings.bootstrap_token)
 
 
 def add_owner(db, project_id: str, user: CurrentUser | None) -> None:

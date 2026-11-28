@@ -1,30 +1,58 @@
+# Phase 16 — production-style compose file (single host, CPU by default).
+# 1. cp .env.example .env  and set at least AUTH_SECRET_KEY and AUTH_BOOTSTRAP_TOKEN
+# 2. docker compose up -d --build
+# 3. open http://localhost:4001 and create the administrator with the bootstrap token
+#    (or: docker compose exec api python -m app.manage create-admin --email you@example.org)
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: cinema-ai-dub:local
+  restart: unless-stopped
+  env_file:
+    - path: .env
+      required: false
+  volumes:
+    # Projects, uploads, the SQLite database, backups and model caches persist on the host.
+    - ./data:/app/data
+  environment: &app-env
+    PYTHONUNBUFFERED: "1"
+    ENVIRONMENT: production
+    AUTH_MODE: password
+    AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?set AUTH_SECRET_KEY in .env (32+ random characters)}
+    AUTH_BOOTSTRAP_TOKEN: ${AUTH_BOOTSTRAP_TOKEN:-}
+    # Plain-HTTP localhost needs false; set true (or remove) once served over HTTPS.
+    AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+    CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4001,http://127.0.0.1:4001}
+    PROCESSING_MODE: queue
+    TRANSCRIPTION_DEVICE: cpu
+    DIARIZATION_DEVICE: cpu
+    TRANSLATION_DEVICE: cpu
+    LIPSYNC_DEVICE: ${LIPSYNC_DEVICE:-cpu}
+    LOG_FORMAT: ${LOG_FORMAT:-json}
+
 services:
-  cinema-ai-dub:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: cinema-ai-dub:local
-    container_name: cinema-ai-dub
-    restart: unless-stopped
+  api:
+    <<: *app
     ports:
-      - "4001:4001"
-    volumes:
-      # Existing projects, uploads, database and model cache stay on the host.
-      - ./data:/app/data
-    environment:
-      PYTHONUNBUFFERED: "1"
-      ENVIRONMENT: production
-      CORS_ORIGINS: http://localhost:4001,http://127.0.0.1:4001
-      TRANSCRIPTION_DEVICE: cpu
-      DIARIZATION_DEVICE: cpu
-      TRANSLATION_DEVICE: cpu
+      - "${PORT:-4001}:4001"
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4001/api/v1/health', timeout=5)"
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4001/api/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 90s
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+    # Heavy models (Whisper, NLLB, MMS, Wav2Lip) load here, not in the API process.
+    # Scale with: docker compose up -d --scale worker=2  (needs RAM for each copy)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys; sys.exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3

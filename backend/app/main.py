@@ -1,3 +1,6 @@
+import json
+import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 
@@ -34,6 +37,12 @@ from .routers import processing  # Phase 15
 from .services import auth, job_queue
 from . import models_timeline  # noqa: F401 - registers Phase 14 tables before init_db
 from .services.media import AppError
+from .services.storage import InvalidStorageKey
+from .logging_setup import configure_logging
+
+configure_logging()
+log = logging.getLogger("cinema.api")
+MAX_INSPECT_BODY = 2 * 1024 * 1024  # JSON bodies inspected for foreign ids
 
 
 @asynccontextmanager
@@ -50,18 +59,11 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.8.0-phase15",
+    version="0.9.0-phase16",
     description="Central API for browser-based AI dubbing project management.",
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(system.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
@@ -100,6 +102,20 @@ async def security_middleware(request: Request, call_next):
             return error_response(403, "FORBIDDEN", "Administrator access required.")
         if not await run_in_threadpool(auth.authorize_path, path, user):
             return error_response(404, "NOT_FOUND", "Not found.")  # do not reveal other users' ids
+        # Ids and storage keys can also arrive in the query string or a JSON body.
+        ids, keys = auth.collect_references(dict(request.query_params))
+        content_type = request.headers.get("content-type", "")
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and content_type.startswith("application/json"):
+            raw = await request.body()
+            if len(raw) > MAX_INSPECT_BODY:
+                return error_response(413, "BODY_TOO_LARGE", "JSON body is too large.")
+            try:
+                payload = json.loads(raw or b"null")
+            except ValueError:
+                payload = None
+            auth.collect_references(payload, None, ids, keys)
+        if (ids or keys) and not await run_in_threadpool(auth.authorize_ids, ids, keys, user):
+            return error_response(404, "NOT_FOUND", "Not found.")
     response = await call_next(request)
     if auth.redaction_enabled() and response.headers.get("content-type", "").startswith("application/json"):
         body = b"".join([chunk async for chunk in response.body_iterator])
@@ -107,6 +123,37 @@ async def security_middleware(request: Request, call_next):
         headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
         return Response(content=cleaned, status_code=response.status_code, headers=headers, media_type="application/json")
     return response
+
+
+@app.middleware("http")
+async def request_log_middleware(request: Request, call_next):
+    """Access log with a request id (also returned as X-Request-ID)."""
+    request_id = request.headers.get("x-request-id", "")[:64] or uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:  # noqa: BLE001 — logged, then the generic handler answers
+        log.exception("unhandled error id=%s %s %s", request_id, request.method, request.url.path)
+        raise
+    elapsed = (time.perf_counter() - started) * 1000
+    if request.url.path.startswith("/api/"):
+        level = logging.WARNING if response.status_code >= 500 else logging.INFO
+        log.log(level, "%s %s -> %s %.0fms id=%s", request.method, request.url.path, response.status_code, elapsed, request_id)
+    response.headers["X-Request-ID"] = request_id
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
+# CORS last = outermost, so even 401/403/404 from the security layer carry CORS headers.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def error_response(status_code: int, code: str, message: str, details: object = None) -> JSONResponse:
@@ -119,6 +166,11 @@ def error_response(status_code: int, code: str, message: str, details: object = 
 @app.exception_handler(AppError)
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     return error_response(exc.status_code, exc.code, exc.message)
+
+
+@app.exception_handler(InvalidStorageKey)
+async def storage_key_handler(_request: Request, _exc: InvalidStorageKey) -> JSONResponse:
+    return error_response(400, "INVALID_STORAGE_KEY", "Invalid file reference.")
 
 
 @app.exception_handler(RequestValidationError)
@@ -138,7 +190,8 @@ async def http_error_handler(_request: Request, exc: StarletteHTTPException) -> 
 
 
 @app.exception_handler(Exception)
-async def unhandled_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    log.error("unhandled %s on %s %s: %s", type(exc).__name__, request.method, request.url.path, exc, exc_info=exc)
     detail = str(exc)[:500]
     if auth.redaction_enabled():
         detail = None  # never leak internals (paths, SQL) outside development
@@ -151,6 +204,9 @@ if (_dist / "assets").is_dir():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            # An unknown API route must answer JSON 404, not the HTML app shell with 200.
+            return error_response(404, "NOT_FOUND", "API route not found.")
         index = _dist / "index.html"
         if index.is_file():
             return FileResponse(index)

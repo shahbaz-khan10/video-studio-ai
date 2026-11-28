@@ -32,9 +32,17 @@ COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend ./backend
+COPY workers ./workers
 COPY --from=frontend /app/dist ./dist
-RUN mkdir -p /app/data
+
+# Phase 16: run as an unprivileged user. ./data is bind-mounted; on Linux hosts make it
+# writable for UID 10001 (sudo chown -R 10001:10001 data) or set APP_UID at build time.
+ARG APP_UID=10001
+RUN useradd --uid ${APP_UID} --create-home --shell /usr/sbin/nologin cinema     && mkdir -p /app/data     && chown -R cinema:cinema /app/data
+USER cinema
 
 WORKDIR /app/backend
 EXPOSE 4001
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4001"]
+# --proxy-headers trusts X-Forwarded-* only from FORWARDED_ALLOW_IPS (default 127.0.0.1);
+# set it to your reverse proxy address. Never "*" when the port is exposed directly.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4001", "--proxy-headers"]

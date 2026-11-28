@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -100,12 +100,18 @@ def recover_now(db: Session = Depends(get_db)) -> dict:
 
 @router.get("/jobs")
 def job_list(
+    request: Request,
     status: str | None = None,
     project_id: str | None = None,
     limit: int = Query(default=50, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    from ..services import auth
+
     query = select(ProcessingJob).order_by(ProcessingJob.created_at.desc()).limit(limit)
+    allowed = auth.accessible_project_ids(db, getattr(request.state, "user", None))
+    if allowed is not None:  # non-admin: only jobs of the user's own projects
+        query = query.where(ProcessingJob.project_id.in_(allowed or {"-"}))
     if status:
         query = query.where(ProcessingJob.status == status)
     if project_id:

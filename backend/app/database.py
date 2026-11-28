@@ -49,8 +49,8 @@ def _ensure_sqlite_parent() -> None:
 _ensure_sqlite_parent()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+connect_args = {"check_same_thread": False, "timeout": 30} if settings.database_url.startswith("sqlite") else {}
+engine = create_engine(settings.database_url, connect_args=connect_args, future=True, pool_pre_ping=True)
 
 if settings.database_url.startswith("sqlite"):
 
@@ -58,6 +58,12 @@ if settings.database_url.startswith("sqlite"):
     def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        # Phase 16: the API and queue workers share one SQLite file. WAL lets readers run
+        # alongside a writer and busy_timeout waits instead of failing with "database is locked".
+        if ":memory:" not in settings.database_url:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()
 
 
@@ -103,6 +109,21 @@ def init_db() -> None:
         models_tts,
     )
 
-    Base.metadata.create_all(bind=engine)
-    if engine.dialect.name == "sqlite":
-        _migrate_sqlite()
+    # Phase 16: the API and queue workers may start at the same moment on a fresh database.
+    # Both check "table exists?" then CREATE, so the loser sees "already exists" or
+    # "duplicate column". Re-running is safe (create_all/migrations skip what exists).
+    import time
+
+    from sqlalchemy.exc import OperationalError
+
+    for attempt in range(8):
+        try:
+            Base.metadata.create_all(bind=engine)
+            if engine.dialect.name == "sqlite":
+                _migrate_sqlite()
+            return
+        except OperationalError as error:
+            message = str(error).lower()
+            if attempt == 7 or not any(text in message for text in ("already exists", "duplicate column", "database is locked")):
+                raise
+            time.sleep(0.25 * (attempt + 1))

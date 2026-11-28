@@ -273,3 +273,33 @@
   .tl-corner { width: 150px !important; }
   .tl-time { font-size: 11px; }
 }
+
+/* Phase 16 — export results */
+.tl-export-files {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tl-export-files li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tl-export-files small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.tl-export-files span {
+  overflow-wrap: anywhere;
+}

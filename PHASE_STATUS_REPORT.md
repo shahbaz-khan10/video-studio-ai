@@ -1,25 +1,26 @@
 # CINEMA AI DUB — Phase Status Report
 
-**Date:** 27 November 2026
+**Date:** 28 November 2026
 **Branch:** `phase-8-translation`
-**Phases complete:** 11 of 16 (69%). **Remaining:** 5 (Phases 12–16).
+**Phases complete:** 16 of 16. Phase 16 is done but not yet committed.
+**Phase 16 details:** `docs/PHASE16_FINAL_REPORT.md` (sections A–J).
 
 ## Khulasa (summary)
 
-- **11 phases mukammal hain (1 se 11).** 5 baqi hain (12 se 16).
-- **Saare automated tests pass hain:** 118 pass, aur 4 opt-in real-model tests jaan boojh kar skip hain.
-- **Phase 1–10 git mein commit ho chuke hain.** Phase 11 abhi commit nahi hua; files tayyar hain.
-- **Apni awaaz se check karein.** Awaaz ki quality aur timing maine naap kar check ki hai, kaan se nahi suni.
+- **Saare 16 phase mukammal hain.** Phase 1–15 commit ho chuke hain; Phase 16 ki files tayyar hain, commit baqi hai.
+- **Tests:** backend ke 231 pass hain. 5 real-model tests alag se chala kar pass kiye. Security tests 16/16, aur browser UI test bhi chala.
+- **Poora pipeline E2E chala** (production mode, sign-in on, queue worker): upload se lip sync aur final export tak.
+- **Commercial use ke liye nahi:** default models (NLLB, MMS-TTS, Wav2Lip) non-commercial hain. Tafseel `docs/LICENSES_AND_MODELS.md` mein hai.
+- **GPU aur cloud test nahi huay.** Is PC par GPU nahi hai, aur paid service istemal nahi ki.
 
 ---
 
 ## 1. Count
 
-| | Phases | Share |
-|---|---|---|
-| Complete | 11 | 69% |
-| Remaining | 5 | 31% |
-| **Total** | **16** | |
+| | Phases |
+|---|---|
+| Complete | 16 |
+| Remaining | 0 |
 
 ## 2. Phase-by-phase status
 
@@ -35,14 +36,14 @@
 | 8 | Translation Engine | ✅ Complete | ✅ `a60cdd8` | 29 (+1 real-model, opt-in) |
 | 9 | Character Voice Profiles | ✅ Complete | ✅ `dbde922` | 10 |
 | 10 | Natural Voice Generation | ✅ Complete | ✅ `9e0f3a6` | 22 (+1 real-model, opt-in) |
-| 11 | Dialogue Timing & Synchronization | ✅ Complete | ⚠️ **Not yet committed** | 21 |
-| 12 | Audio Mixing Studio | ⏳ Not started | — | — |
-| 13 | AI Lip Sync & Facial Synchronization | ⏳ Not started | — | — |
-| 14 | Professional Timeline Editor | ⏳ Not started | — | — |
-| 15 | Device & Processing Optimization | ⏳ Not started | — | — |
-| 16 | Final Testing & Production | ⏳ Not started | — | — |
+| 11 | Dialogue Timing & Synchronization | ✅ Complete | ✅ `50a9559` | 21 |
+| 12 | Audio Mixing Studio | ✅ Complete | ✅ `50a9559` | 17 |
+| 13 | AI Lip Sync & Facial Synchronization | ✅ Complete | ✅ `c61fc0e` | 21 (+1 real-model, opt-in) |
+| 14 | Professional Timeline Editor | ✅ Complete | ✅ `c61fc0e` | 36 |
+| 15 | Device & Processing Optimization | ✅ Complete | ✅ `c61fc0e` | 17 |
+| 16 | Final Testing & Production | ✅ Complete | ⚠️ **Not yet committed** | 16 security tests + E2E tools in `tests/e2e/` |
 
-The test counts are the number of test functions in each file. Phase 11 has 20 functions, and one runs once each for Urdu and Hindi, giving 21 test runs. Latest full run: **118 passed, 4 skipped, 0 failed** (about 2.5 minutes).
+The test counts are the number of test functions in each file. Phase 11 has 20 functions, and one runs once each for Urdu and Hindi, giving 21 test runs. Latest full run (28 Nov 2026): **231 passed, 5 skipped, 0 failed**. The 5 skipped tests are the opt-in real-model ones; run separately with real models, all 5 passed.
 
 ## 3. What each phase delivers
 
@@ -104,18 +105,20 @@ Each generated line is fitted into its original time window using the gentlest m
 | Video ↔ dub sync (headless Chrome) | Clips started within ~0 ms of their placed time, after start and after seeking. Speaker output latency is not included. |
 | End-to-end demo | Upload → Whisper → characters → translation → voices → timing: all 5 Urdu and 5 Hindi lines fit at natural speed. |
 
-## 5. Open items and known limitations
+## 5. Phases 12–16 in brief
 
-1. **Commit Phase 11.** Its files are ready in the working tree but not yet committed.
-2. **Licences:** the default translation model (NLLB-200) and the default voice (MMS-TTS) are **non-commercial**. For a commercial release, switch to IndicTrans2 or MADLAD, and to commercially licensed voices.
-3. **Built-in voice:** MMS-TTS has one male-sounding voice per language. Female characters get a raised pitch and sound synthetic. Better voices need Phase 9 Piper voices or a self-hosted GPU worker.
-4. **Emotion:** none of the local engines supports emotional delivery. Only a self-hosted worker that declares emotion support can use it.
-5. **Human listening:** voice quality and the sped-up timing were measured, not listened to. Please review them by ear.
-6. **Merging:** Phases 8–11 are on branch `phase-8-translation`. To bring them to the main branch: `git switch ai_dub_video` then `git merge phase-8-translation`.
+- **12, Mixing Studio:** per-language mixes, loudness targets (−16 LUFS), true-peak limit.
+- **13, Lip Sync:** Wav2Lip on CPU, a SyncNet score, face selection and review.
+- **14, Timeline Editor:** tracks, clips, undo/redo, external audio, export.
+- **15, Optimization:** job queue with workers, leases and recovery, resource monitor, temp cleanup, remote worker mode, sign-in.
+- **16, Final Testing & Production:** final multilingual export with lip-synced picture, security hardening, Docker, backups, licence audit. See `docs/PHASE16_FINAL_REPORT.md`.
 
-## 6. Next phase
+## 6. Open items and known limitations
 
-**Phase 12 — Audio Mixing Studio.** It can build on the per-language dialogue tracks rendered in Phase 11 and the stems from Phase 4.
+1. **Commit Phase 16.** Its files are in the working tree but not yet committed.
+2. **Licences:** NLLB-200, MMS-TTS and Wav2Lip are **non-commercial**.
+3. **Not tested:** GPU, cloud workers, low-RAM machines, the full AI pipeline on a long film, and real phones.
+4. **Human review:** voice and lip-sync quality were measured, not watched or listened to.
 
 ## 7. How to run
 
@@ -124,4 +127,6 @@ cd backend && pip install -r requirements.txt
 cd backend && python -m uvicorn app.main:app --port 8000   # API + built UI at http://localhost:8000
 npm install && npm run dev                                 # development UI at http://localhost:5173
 cd backend && python -m pytest -q                          # full test suite
+cd backend && python -m app.manage check-config            # production settings check
+docker compose up -d --build                               # Docker (see DOCKER.md)
 ```

@@ -14,6 +14,8 @@ import {
   type TimelineTrack,
   type Waveform,
 } from "../lib/timelineApi";
+import { JobProgress } from "./JobProgress";
+import type { ExportOutput } from "../lib/timelineApi";
 import "./TimelineEditor.css";
 
 interface TimelineEditorProps {
@@ -199,6 +201,12 @@ export function TimelineEditor({ projectId, videoId, videoRef, videoDurationMs }
   const [lipSync, setLipSync] = useState<LipSyncSegment[]>([]);
   const [exportMode, setExportMode] = useState<"multitrack" | "separate_language">("multitrack");
   const [exportInfo, setExportInfo] = useState<string | null>(null);
+  const [exportContainer, setExportContainer] = useState<"mkv" | "mp4" | "mov">("mkv");
+  const [exportLipSync, setExportLipSync] = useState(true);
+  const [multitrackPicture, setMultitrackPicture] = useState<string>("");
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportOutputs, setExportOutputs] = useState<ExportOutput[]>([]);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const effectiveSnap = snapEnabled ? snapMs : 0;
 
@@ -659,6 +667,36 @@ export function TimelineEditor({ projectId, videoId, videoRef, videoDurationMs }
     } catch (err) { setExportInfo(err instanceof Error ? err.message : "Export plan failed"); }
   }, [timeline, exportMode]);
 
+  const renderExport = useCallback(async () => {
+    if (!timeline) return;
+    setExportBusy(true);
+    setExportOutputs([]);
+    try {
+      const job = await timelineApi.exportRender(timeline.id, {
+        mode: exportMode,
+        container: exportContainer,
+        include_beds: true,
+        use_lipsync: exportLipSync,
+        multitrack_lipsync_language: exportMode === "multitrack" && exportLipSync && multitrackPicture ? multitrackPicture : null,
+      });
+      setExportJobId(job.id);
+      setExportInfo("Rendering… this runs on the server; you can keep editing.");
+    } catch (err) {
+      setExportBusy(false);
+      setExportInfo(err instanceof Error ? err.message : "Export failed to start");
+    }
+  }, [timeline, exportMode, exportContainer, exportLipSync, multitrackPicture]);
+
+  const exportSettled = useCallback(async () => {
+    setExportBusy(false);
+    if (!exportJobId) return;
+    try {
+      const result = await timelineApi.exportOutputs(exportJobId);
+      setExportOutputs(result.outputs);
+      setExportInfo(result.status === "completed" ? `${result.outputs.length} file(s) ready.` : `Export ${result.status}.`);
+    } catch (err) { setExportInfo(err instanceof Error ? err.message : "Could not read export results"); }
+  }, [exportJobId]);
+
   // ---- rendering ----------------------------------------------------------
   if (loading) return <div className="panel tl-editor"><p className="planned-note">Loading timeline…</p></div>;
   if (error && !timeline) return <div className="panel tl-editor"><p className="form-error">{error}</p></div>;
@@ -823,8 +861,50 @@ export function TimelineEditor({ projectId, videoId, videoRef, videoDurationMs }
             </label>
           ))}
         </span>
+        <label className="tl-check">Container
+          <select value={exportContainer} onChange={(e) => setExportContainer(e.target.value as "mkv" | "mp4" | "mov")}>
+            <option value="mkv">MKV (best multi-track support)</option>
+            <option value="mp4">MP4</option>
+            <option value="mov">MOV</option>
+          </select>
+        </label>
+        <label className="tl-check">
+          <input type="checkbox" checked={exportLipSync} onChange={(e) => setExportLipSync(e.target.checked)} />
+          Use lip-synced picture
+        </label>
+        {exportMode === "multitrack" && exportLipSync && (
+          <label className="tl-check" title="A multi-track file has one picture; mouths can only match one language.">Picture
+            <select value={multitrackPicture} onChange={(e) => setMultitrackPicture(e.target.value)}>
+              <option value="">Original video (copied, no re-encode)</option>
+              <option value="ur">Urdu lip sync (re-encoded)</option>
+              <option value="hi">Hindi lip sync (re-encoded)</option>
+            </select>
+          </label>
+        )}
         <button className="button button-quiet" type="button" onClick={makeExportPlan}>Preview export plan</button>
+        <button className="button button-primary" type="button" onClick={() => void renderExport()} disabled={exportBusy}>
+          {exportBusy ? "Rendering…" : "Render export"}
+        </button>
       </div>
+      {exportJobId && <JobProgress jobId={exportJobId} onSettled={() => void exportSettled()} onJobChange={(id) => setExportJobId(id)} />}
+      {exportOutputs.length > 0 && (
+        <ul className="tl-export-files" aria-label="Exported files">
+          {exportOutputs.map((output, index) => (
+            <li key={output.storage_key}>
+              <strong>{output.kind === "multitrack" ? "Multi-track" : `${(output.language ?? "").toUpperCase()} only`}</strong>
+              <span>{output.path}</span>
+              <small>
+                {output.video} · {output.duration_s ?? "?"}s · {(output.size_bytes / 1e6).toFixed(1)} MB · audio:{" "}
+                {output.streams.filter((s) => s.type === "audio").map((s) => s.language ?? "und").join(", ")}
+                {output.lipsync ? ` · ${output.lipsync} lip-sync clips` : ""}
+              </small>
+              <a className="button button-quiet" href={timelineApi.exportFileUrl(exportJobId!, index, true)} download>
+                Download
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
       {exportInfo && <p className="planned-note" role="status">{exportInfo}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useRoute } from "../lib/router";
+import { useAuth } from "./AuthGate";
 import type { ServerInfo } from "../types";
 
 interface LayoutProps {
@@ -10,6 +11,7 @@ interface LayoutProps {
 
 export function Layout({ children, info, databaseStatus }: LayoutProps) {
   const route = useRoute();
+  const { user, mode, logout } = useAuth();
   const activeNav = route.name === "dashboard" ? "dashboard" : "projects";
 
   return (
@@ -45,7 +47,19 @@ export function Layout({ children, info, databaseStatus }: LayoutProps) {
             <h1>CINEMA AI DUB</h1>
             <p>Upload, organise and inspect dubbing projects in one place.</p>
           </div>
-          <div className="topbar-badge">Foundation build</div>
+          {mode === "password" && user ? (
+            <div className="topbar-user">
+              <span title={user.email}>
+                {user.display_name || user.email}
+                {user.is_admin ? " · admin" : ""}
+              </span>
+              <button type="button" className="button button-quiet" onClick={() => void logout()}>
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <div className="topbar-badge">Local mode (sign-in off)</div>
+          )}
         </header>
         <main className="content">{children}</main>
       </div>

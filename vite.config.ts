@@ -16,6 +16,7 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    sourcemap: true,
+    // Phase 16: no public source maps in production builds (set VITE_SOURCEMAP=true to debug).
+    sourcemap: process.env.VITE_SOURCEMAP === "true",
   },
 });

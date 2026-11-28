@@ -123,7 +123,14 @@ class SyncNet(nn.Module):
 
 
 def load_checkpoint(model: nn.Module, path: str) -> nn.Module:
-    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    # weights_only=True refuses pickled code objects (a tampered .pth cannot run code).
+    try:
+        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+    except Exception:  # noqa: BLE001 — some original checkpoints store extra Python objects
+        import numpy as _np
+
+        with torch.serialization.safe_globals([_np.core.multiarray.scalar, _np.dtype]):
+            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
     state = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
     state = {key.replace("module.", "", 1): value for key, value in state.items()}
     model.load_state_dict(state, strict=True)

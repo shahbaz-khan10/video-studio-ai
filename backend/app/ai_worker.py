@@ -44,7 +44,7 @@ TOKEN = os.environ.get("REMOTE_WORKER_TOKEN", "")
 MAX_UPLOAD_MB = int(os.environ.get("REMOTE_WORKER_MAX_UPLOAD_MB", "512"))
 ALLOW_NO_TOKEN = os.environ.get("REMOTE_WORKER_ALLOW_NO_TOKEN", "") == "1"  # local experiments only
 
-app = FastAPI(title="CINEMA AI DUB — remote AI worker", version="0.8.0-phase15")
+app = FastAPI(title="CINEMA AI DUB — remote AI worker", version="0.9.0-phase16")
 _busy = threading.Semaphore(1)  # one heavy model job at a time on this box
 _stats = {"requests": 0, "started": time.time(), "last_request": None}
 

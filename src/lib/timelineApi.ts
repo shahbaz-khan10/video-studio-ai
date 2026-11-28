@@ -239,9 +239,42 @@ export const timelineApi = {
   // export
   exportPlan: (timelineId: string, body: { mode?: string; container?: string; languages?: string[]; include_beds?: boolean; include_original_english?: boolean }) =>
     call<ExportPlan>(`/api/v1/timeline/${enc(timelineId)}/export-plan`, { method: "POST", body: JSON.stringify(body) }),
-  exportRender: (timelineId: string, body: { mode?: string; container?: string; languages?: string[]; include_beds?: boolean }) =>
-    call<Job>(`/api/v1/timeline/${enc(timelineId)}/export`, { method: "POST", body: JSON.stringify(body) }),
+  exportRender: (
+    timelineId: string,
+    body: {
+      mode?: string;
+      container?: string;
+      languages?: string[];
+      include_beds?: boolean;
+      use_lipsync?: boolean;
+      multitrack_lipsync_language?: string | null;
+    },
+  ) => call<Job>(`/api/v1/timeline/${enc(timelineId)}/export`, { method: "POST", body: JSON.stringify(body) }),
+  exportOutputs: (jobId: string) => call<ExportOutputs>(`/api/v1/jobs/${enc(jobId)}/timeline-export`),
+  exportFileUrl: (jobId: string, index: number, download = false) =>
+    `${API_BASE}/api/v1/jobs/${enc(jobId)}/timeline-export/files/${index}${download ? "?download=1" : ""}`,
 };
+
+export interface ExportOutput {
+  kind: "multitrack" | "separate_language";
+  language?: string;
+  path: string;
+  storage_key: string;
+  audio_streams: number;
+  video: string;
+  streams: { index: number; type: string; codec: string; language: string | null }[];
+  titles: string[];
+  duration_s: number | null;
+  size_bytes: number;
+  lipsync?: number;
+  lipsync_language?: string | null;
+}
+
+export interface ExportOutputs {
+  job_id: string;
+  status: string;
+  outputs: ExportOutput[];
+}
 
 export const TRACK_KIND_LABELS: Record<TrackKind, string> = {
   video: "Original Video",

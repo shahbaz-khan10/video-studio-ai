@@ -521,7 +521,9 @@ def populate_from_phases(db: Session, timeline: TimelineProject, video: Video) -
         asset = _latest_asset(db, video.id, asset_kind)
         if track is None or asset is None or not storage.absolute_path(asset.storage_key).is_file():
             continue
-        length = asset.duration_ms or duration or 0
+        # MediaAsset has no duration column; Phase 4 records it in metadata (else: film length).
+        meta = asset.metadata_json or {}
+        length = int(meta.get("duration_ms") or round(float(meta.get("duration_s") or 0) * 1000) or duration or 0)
         db.add(
             TimelineClip(
                 id=new_id(), timeline_id=timeline.id, track_id=track.id, source_type=SOURCE_AUDIO_STEM,
@@ -715,6 +717,26 @@ def add_clip(
     _record(db, timeline, action)
     db.refresh(clip)
     return clip
+
+
+def check_clip_refs(db: Session, timeline: TimelineProject, track_id: str, external_audio_id: str | None,
+                    character_id: str | None) -> None:
+    """Ids in a clip request must belong to this timeline / project."""
+    track = db.get(TimelineTrack, track_id)
+    if track is None or track.timeline_id != timeline.id:
+        raise AppError(404, "TRACK_NOT_FOUND", "Track not found in this timeline.")
+    if external_audio_id:
+        from ..models_timeline import ExternalAudio
+
+        row = db.get(ExternalAudio, external_audio_id)
+        if row is None or row.project_id != timeline.project_id:
+            raise AppError(404, "EXTERNAL_AUDIO_NOT_FOUND", "External audio not found in this project.")
+    if character_id:
+        from ..models import Character
+
+        row = db.get(Character, character_id)
+        if row is None or row.project_id != timeline.project_id:
+            raise AppError(404, "CHARACTER_NOT_FOUND", "Character not found in this project.")
 
 
 def move_clip(db: Session, clip_id: str, start_ms: int, track_id: str | None = None, snap_ms: int = 0) -> TimelineClip:
@@ -1483,8 +1505,14 @@ def run_export_job(job_id: str, timeline_id: str, options: dict | None = None) -
                 return
             raise JobCancelled("Job was cancelled before it started")
 
+        from . import final_export
+
         mode = opts.get("mode", "multitrack")
-        container = opts.get("container", "mkv")
+        container = str(opts.get("container", "mkv")).lower()
+        if container not in final_export.ALLOWED_CONTAINERS:
+            raise AppError(422, "INVALID_CONTAINER", "Container must be mkv, mp4 or mov.")
+        use_lipsync = bool(opts.get("use_lipsync", True))
+        multitrack_lipsync = opts.get("multitrack_lipsync_language")
         languages = opts.get("languages")
         include_beds = bool(opts.get("include_beds", True))
         out_dir_key = f"projects/{timeline.project_id}/timeline_exports/{job_id}"
@@ -1499,6 +1527,55 @@ def run_export_job(job_id: str, timeline_id: str, options: dict | None = None) -
 
         _set_step(db, job, "render_tracks", "running", "Rendering audio tracks", 15)
         outputs_meta: list[dict] = []
+        duration_s = (video.duration_ms or timeline.duration_ms or 0) / 1000
+        lipsync_used: dict[str, dict] = {}
+
+        def picture_for(language: str | None, tmp_dir: Path) -> tuple[Path, bool]:
+            """(video file, re-encoded?) — the lip-synced picture for ``language`` when available."""
+            if not use_lipsync or not language or language in {"en", "original", "original_english"}:
+                return video_path, False
+            if language in lipsync_used:
+                info = lipsync_used[language]
+                return (Path(info["path"]), True) if info.get("path") else (video_path, False)
+            composed = final_export.compose_lipsync_video(db, video, language, tmp_dir / f"picture_{language}.mp4", check_active)
+            lipsync_used[language] = {"path": str(composed.path) if composed.path else None, "clips": composed.clips,
+                                      "skipped": composed.skipped}
+            return (composed.path, True) if composed.path else (video_path, False)
+
+        def mux(picture: Path, reencoded: bool, wavs: list[Path], infos: list[dict], out_path: Path, default_index: int = 0) -> dict:
+            command = [ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(picture)]
+            for wav in wavs:
+                command += ["-i", str(wav)]
+            command += ["-map", "0:v:0", "-c:v", "copy"]
+            for idx, info in enumerate(infos[: len(wavs)]):
+                lang = final_export.iso639_2(info.get("stream_language"))
+                command += ["-map", f"{idx + 1}:a:0", f"-metadata:s:a:{idx}", f"language={lang}",
+                            f"-metadata:s:a:{idx}", f"title={info.get('name') or f'Audio {idx + 1}'}",
+                            # MP4/MOV keep a track's name in its handler box; players (VLC, QuickTime) show it.
+                            f"-metadata:s:a:{idx}", f"handler_name={info.get('name') or f'Audio {idx + 1}'}",
+                            f"-disposition:a:{idx}", "default" if idx == default_index else "0"]
+            command += ["-c:a", "aac", "-b:a", "192k"]
+            if duration_s > 0:
+                command += ["-t", f"{duration_s:.3f}"]  # exact film length (no -shortest truncation)
+            if container in {"mp4", "mov"}:
+                command += ["-movflags", "+faststart"]
+            command.append(str(out_path))
+            result = subprocess.run(command, capture_output=True, check=False)
+            if result.returncode != 0:
+                raise AppError(500, "EXPORT_MUX_FAILED", (result.stderr or b"").decode(errors="ignore")[-500:])
+            probe = final_export.probe_streams(out_path)
+            playable = final_export.decode_check(out_path, seconds=min(duration_s, 30.0) if duration_s else 30.0)
+            problems = []
+            if not playable:
+                problems.append("the file does not decode")
+            if duration_s and probe["duration_s"] is not None and abs(probe["duration_s"] - duration_s) > 0.1:
+                problems.append(f"duration {probe['duration_s']}s differs from the film's {duration_s:.3f}s")
+            if problems:
+                raise AppError(500, "EXPORT_VALIDATION_FAILED", "; ".join(problems))
+            return {"video": "lip-synced picture re-encoded (H.264 CRF 18)" if reencoded else "original video stream copied (no re-encode)",
+                    "streams": probe["streams"], "titles": probe["titles"], "duration_s": probe["duration_s"],
+                    "size_bytes": out_path.stat().st_size, "validated": True}
+
         with tempfile.TemporaryDirectory(prefix="timeline-export-") as tmp:
             tmp_dir = Path(tmp)
             # group: multitrack -> all streams in one output; separate -> per language
@@ -1519,29 +1596,13 @@ def run_export_job(job_id: str, timeline_id: str, options: dict | None = None) -
                 rendered = render_streams(stream_infos, "stream")
                 _set_step(db, job, "render_tracks", "completed", f"{len(rendered)} streams", 55)
                 _set_step(db, job, "mux_outputs", "running", "Muxing container", 60)
-                video_id = (plan.get("video_track") or {}).get("track_id")
-                video_source = video_path
-                if video_source.is_file():
-                    out_path = out_dir / f"multitrack.{container}"
-                    command = [ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(video_source)]
-                    for wav in rendered:
-                        command += ["-i", str(wav)]
-                    command += ["-map", "0:v:0", "-c:v", "copy"]
-                    for idx, info in enumerate(stream_infos):
-                        if idx >= len(rendered):
-                            break
-                        command += ["-map", f"{idx + 1}:a:0"]
-                        title = info.get("name", f"audio {idx + 1}")
-                        command += [f"-metadata:s:a:{idx}", f"title={title}"]
-                        lang = info.get("stream_language")
-                        if lang:
-                            command += [f"-metadata:s:a:{idx}", f"language={lang}"]
-                    command += ["-c:a", "aac", "-shortest", str(out_path)]
-                    result = subprocess.run(command, capture_output=True, check=False)
-                    if result.returncode != 0:
-                        raise AppError(500, "EXPORT_MUX_FAILED", (result.stderr or b"").decode(errors="ignore")[-500:])
-                    outputs_meta.append({"kind": "multitrack", "path": out_path.name, "storage_key": f"{out_dir_key}/multitrack.{container}",
-                                         "audio_streams": len(rendered)})
+                if not video_path.is_file():
+                    raise AppError(410, "VIDEO_MISSING", "Original video file is missing.")
+                picture, reencoded = picture_for(multitrack_lipsync, tmp_dir)
+                out_path = out_dir / f"multitrack.{container}"
+                meta = mux(picture, reencoded, rendered, stream_infos, out_path)
+                outputs_meta.append({"kind": "multitrack", "path": out_path.name, "storage_key": f"{out_dir_key}/multitrack.{container}",
+                                     "audio_streams": len(rendered), "lipsync_language": multitrack_lipsync if reencoded else None, **meta})
             else:
                 outputs = plan["outputs"]
                 rendered_cache: dict[str, Path] = {}
@@ -1563,20 +1624,14 @@ def run_export_job(job_id: str, timeline_id: str, options: dict | None = None) -
                         rendered.append(wav_path)
                     if not video_path.is_file():
                         raise AppError(410, "VIDEO_MISSING", "Original video file is missing.")
-                    suffix = output.get("suggested_filename_suffix") or lang
+                    suffix = safe_name(str(output.get("suggested_filename_suffix") or lang))
                     out_path = out_dir / f"{safe_name(timeline.name)}_{suffix}.{container}"
-                    command = [ffmpeg_binary(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(video_path)]
-                    for wav in rendered:
-                        command += ["-i", str(wav)]
-                    command += ["-map", "0:v:0", "-c:v", "copy"]
-                    for idx, wav in enumerate(rendered):
-                        command += ["-map", f"{idx + 1}:a:0"]
-                    command += ["-c:a", "aac", "-shortest", str(out_path)]
-                    result = subprocess.run(command, capture_output=True, check=False)
-                    if result.returncode != 0:
-                        raise AppError(500, "EXPORT_MUX_FAILED", (result.stderr or b"").decode(errors="ignore")[-500:])
+                    picture, reencoded = picture_for(lang, tmp_dir)
+                    stream_infos = [info for info in stream_infos if tracks.get(info["track_id"]) is not None]
+                    meta = mux(picture, reencoded, rendered, stream_infos, out_path)
                     outputs_meta.append({"kind": "separate_language", "language": lang, "path": out_path.name,
-                                         "storage_key": f"{out_dir_key}/{out_path.name}", "audio_streams": len(rendered)})
+                                         "storage_key": f"{out_dir_key}/{out_path.name}", "audio_streams": len(rendered),
+                                         "lipsync": lipsync_used.get(lang, {}).get("clips", 0) if reencoded else 0, **meta})
                 _set_step(db, job, "render_tracks", "completed", f"{len(outputs)} outputs", 55)
                 _set_step(db, job, "mux_outputs", "completed", f"{len(outputs_meta)} file(s)", 90)
 
@@ -1584,7 +1639,8 @@ def run_export_job(job_id: str, timeline_id: str, options: dict | None = None) -
             _set_step(db, job, "mux_outputs", "completed", "Muxed", 90)
         _set_step(db, job, "finalize", "running", "Finalizing", 95)
         # store outputs on options_json for retrieval
-        job.options_json = {**(job.options_json or {}), "outputs": outputs_meta}
+        job.options_json = {**(job.options_json or {}), "outputs": outputs_meta,
+                            "lipsync": {lang: {"clips": info["clips"], "skipped": info["skipped"]} for lang, info in lipsync_used.items()}}
         final = db.execute(
             update(ProcessingJob).where(ProcessingJob.id == job_id, ProcessingJob.status == "running").values(status="completed", current_step="finalize", progress=100)
         )
