@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -25,19 +25,32 @@ from .routers import (
 )
 from .routers import dub_audio  # Phase 10
 from .routers import dub_timing  # Phase 11
+from .routers import lipsync  # Phase 13
 from .routers import mix_studio  # Phase 12
+from .routers import timeline as timeline_router  # Phase 14
+from .routers import external_audio  # Phase 14
+from .routers import auth as auth_router  # Phase 15
+from .routers import processing  # Phase 15
+from .services import auth, job_queue
+from . import models_timeline  # noqa: F401 - registers Phase 14 tables before init_db
 from .services.media import AppError
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    auth.check_configuration()
     init_db()
+    from .services import remote_mode
+
+    remote_mode.apply()
+    if settings.environment != "test":
+        job_queue.start_monitor()  # recovery, worker heartbeat, idle-model unload, temp cleanup
     yield
 
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.6.0-phase9",
+    version="0.8.0-phase15",
     description="Central API for browser-based AI dubbing project management.",
     lifespan=lifespan,
 )
@@ -63,7 +76,37 @@ app.include_router(translations.router, prefix="/api/v1")
 app.include_router(voice_profiles.router, prefix="/api/v1")
 app.include_router(dub_audio.router, prefix="/api/v1")  # Phase 10 — voice generation
 app.include_router(dub_timing.router, prefix="/api/v1")  # Phase 11 — dialogue timing
-app.include_router(mix_studio.router, prefix="/api/v1")  # Phase 12 — mixing studio
+app.include_router(lipsync.router, prefix="/api/v1")  # Phase 13 — lip sync
+app.include_router(mix_studio.router, prefix="/api/v1")  # Phase 12
+app.include_router(timeline_router.router, prefix="/api/v1")  # Phase 14
+app.include_router(external_audio.router, prefix="/api/v1")  # Phase 14 — mixing studio
+app.include_router(auth_router.router, prefix="/api/v1")  # Phase 15 — sign-in
+app.include_router(processing.router, prefix="/api/v1")  # Phase 15 — workers & resources
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Authentication, project authorisation and path redaction (Phase 15)."""
+    path = request.url.path
+    request.state.user = None
+    if auth.enabled() and request.method != "OPTIONS" and path.startswith("/api/") and path not in auth.PUBLIC_PATHS:
+        from starlette.concurrency import run_in_threadpool
+
+        user = await run_in_threadpool(auth.user_from_request, request)
+        if user is None:
+            return error_response(401, "UNAUTHENTICATED", "Sign in to continue.")
+        request.state.user = user
+        if path.startswith(auth.ADMIN_PREFIXES) and not user.is_admin:
+            return error_response(403, "FORBIDDEN", "Administrator access required.")
+        if not await run_in_threadpool(auth.authorize_path, path, user):
+            return error_response(404, "NOT_FOUND", "Not found.")  # do not reveal other users' ids
+    response = await call_next(request)
+    if auth.redaction_enabled() and response.headers.get("content-type", "").startswith("application/json"):
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        cleaned = auth.redact(body.decode("utf-8", "replace")).encode("utf-8")
+        headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+        return Response(content=cleaned, status_code=response.status_code, headers=headers, media_type="application/json")
+    return response
 
 
 def error_response(status_code: int, code: str, message: str, details: object = None) -> JSONResponse:
@@ -96,7 +139,10 @@ async def http_error_handler(_request: Request, exc: StarletteHTTPException) -> 
 
 @app.exception_handler(Exception)
 async def unhandled_error_handler(_request: Request, exc: Exception) -> JSONResponse:
-    return error_response(500, "INTERNAL_ERROR", "Unexpected server error.", str(exc)[:500])
+    detail = str(exc)[:500]
+    if auth.redaction_enabled():
+        detail = None  # never leak internals (paths, SQL) outside development
+    return error_response(500, "INTERNAL_ERROR", "Unexpected server error.", detail)
 
 
 _dist = PROJECT_ROOT / "dist"

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from ..config import settings
+from ..services import auth, job_queue
 from ..database import engine
 from ..schemas import HealthOut, InfoOut
 from ..services.audio import demucs_available, production_info
@@ -93,8 +94,18 @@ def info() -> InfoOut:
             "dubbed_video_preview": True,
             "mixing_studio": True,  # Phase 12
             "mix_rendering": True,
-            "lip_sync": False,
-            "timeline_editor": False,
+            "lip_sync": True,  # Phase 13 (Wav2Lip local; LatentSync/MuseTalk via GPU worker)
+            "timeline_editor": True,  # Phase 14
+            # Phase 15 — central processing
+            "worker_queue": True,
+            "processing_mode": job_queue.processing_settings.mode,
+            "authentication": auth.auth_settings.mode,
+            "job_recovery": True,
+            "resource_monitoring": True,
+            "external_audio_import": True,
+            "timeline_undo_redo": True,
+            "timeline_persistence": True,
+            "multitrack_export": True,
         },
         audio=production_info(),
         transcription=transcription_info(),

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import models_mix  # noqa: F401 — registers Phase 12 tables before init_db
+from ..services import job_queue
 from ..database import get_db
 from ..models import Video
 from ..models_mix import MixRender
@@ -100,7 +101,7 @@ def preview(video_id: str, payload: PreviewRequest, db: Session = Depends(get_db
 def render(video_id: str, payload: RenderRequest, background: BackgroundTasks, db: Session = Depends(get_db)) -> JobOut:
     video = _video(db, video_id)
     job = service.create_render_job(db, video, payload.target, payload.format)
-    background.add_task(service.run_render_job, job.id, video.id, job.options_json)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 

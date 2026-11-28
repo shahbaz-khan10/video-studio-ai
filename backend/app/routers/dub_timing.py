@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import models_timing  # noqa: F401 — registers the Phase 11 table before init_db
+from ..services import job_queue
 from ..database import get_db
 from ..models import TranscriptSegment, Video
 from ..models_timing import DubTimingPlacement
@@ -78,7 +79,7 @@ def fit_batch(video_id: str, payload: FitBatchRequest, background: BackgroundTas
         detail = "Generate voice audio (Phase 10) first." if skipped["no_audio"] else "No lines need timing with these settings."
         raise AppError(409, "NOTHING_TO_FIT", detail)
     job = service.create_timing_job(db, video, options)
-    background.add_task(service.run_timing_job, job.id, video.id, job.options_json)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 

@@ -3,6 +3,7 @@ from sqlalchemy import select, update as sql_update
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..services import job_queue
 from ..database import get_db
 from ..models import ProcessingJob, Transcript, TranscriptSegment, Video, new_id, utcnow
 from ..schemas import (
@@ -95,7 +96,7 @@ def transcribe_video(
         "word_timestamps": payload.word_timestamps,
     }
     job = create_transcription_job(db, video.project_id, video.id, options)
-    background.add_task(run_transcription_job, job.id, video.id, job.options_json)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 

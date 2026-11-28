@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from ..schemas import (
     ProjectUpdate,
     build_video_out,
 )
+from ..services import auth
 from ..services.storage import storage
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -42,10 +43,14 @@ def project_to_out(project: Project, db: Session) -> ProjectOut:
 
 @router.get("", response_model=list[ProjectSummary])
 def list_projects(
+    request: Request,
     search: str | None = Query(default=None, max_length=120),
     db: Session = Depends(get_db),
 ) -> list[ProjectSummary]:
     query = select(Project)
+    allowed = auth.accessible_project_ids(db, getattr(request.state, "user", None))
+    if allowed is not None:  # signed-in non-admin: only their projects
+        query = query.where(Project.id.in_(allowed or {""}))
     if search:
         query = query.where(Project.name.ilike(f"%{search}%"))
     projects = db.scalars(query.order_by(Project.updated_at.desc())).all()
@@ -65,7 +70,7 @@ def list_projects(
 
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> ProjectOut:
+def create_project(payload: ProjectCreate, request: Request, db: Session = Depends(get_db)) -> ProjectOut:
     project = Project(
         name=payload.name.strip(),
         description=payload.description,
@@ -76,6 +81,8 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Pro
     db.add(project)
     db.commit()
     db.refresh(project)
+    if auth.enabled():
+        auth.add_owner(db, project.id, getattr(request.state, "user", None))
     storage.project_dir(project.id)
     return project_to_out(project, db)
 

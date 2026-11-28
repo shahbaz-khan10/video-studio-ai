@@ -422,4 +422,4 @@ def test_fitted_clip_download_and_capabilities(client):
         assert handle.getframerate() == 24000
         assert abs(handle.getnframes() * 1000 / 24000 - placement["fitted_duration_ms"]) < 5
     info = client.get("/api/v1/info").json()
-    assert info["capabilities"]["dialogue_timing"] is True and info["capabilities"]["lip_sync"] is False
+    assert info["capabilities"]["dialogue_timing"] is True and info["capabilities"]["lip_sync"] is True

@@ -183,6 +183,10 @@ class ProcessingJob(Base):
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     options_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Phase 15 — queue lease: which worker holds the job and until when.
+    worker_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow

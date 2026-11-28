@@ -1,0 +1,235 @@
+/* Phase 13 — Lip Sync Studio */
+
+.studio-lipsync {
+  grid-column: 1 / -1;
+}
+
+.lip-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.lip-models {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.lip-models th,
+.lip-models td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.lip-models th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.lip-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.lip-list {
+  display: grid;
+  gap: 4px;
+  max-height: 640px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.lip-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lip-list input {
+  width: auto;
+  margin: 0;
+}
+
+.lip-row {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(16, 24, 39, 0.6);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lip-list li.is-selected .lip-row {
+  border-color: var(--primary);
+}
+
+.lip-row .muted {
+  flex-basis: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lip-state-review,
+.lip-state-accepted {
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+  text-transform: none;
+}
+
+.lip-state-needs_face,
+.lip-state-stale,
+.lip-state-rejected {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+  text-transform: none;
+}
+
+.lip-state-failed {
+  background: rgba(251, 113, 133, 0.14);
+  color: #fda4af;
+  text-transform: none;
+}
+
+.lip-state-no_face,
+.lip-state-no_audio,
+.lip-state-not_started {
+  text-transform: none;
+}
+
+.lip-analysis,
+.lip-result {
+  display: grid;
+  gap: 8px;
+}
+
+.lip-result h4 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.lip-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.lip-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lip-face {
+  position: absolute;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  background: rgba(124, 92, 255, 0.12);
+  cursor: pointer;
+}
+
+.lip-face span {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 1px 5px;
+  border-radius: 4px 4px 0 0;
+  background: rgba(8, 13, 26, 0.85);
+  color: #fff;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.lip-face.is-chosen {
+  border-color: #34d399;
+  background: rgba(52, 211, 153, 0.18);
+}
+
+.lip-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lip-compare figure {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.lip-compare figcaption {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.lip-compare video {
+  width: 100%;
+  border-radius: 6px;
+  background: #000;
+}
+
+.lip-scores {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.lip-score {
+  display: grid;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(8, 13, 26, 0.5);
+  font-size: 12px;
+}
+
+.lip-score span,
+.lip-score small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.lip-score strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.lip-caveat {
+  margin: 0;
+  font-size: 11px;
+}
+
+.lip-note {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1000px) {
+  .lip-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .lip-compare-grid,
+  .lip-scores {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

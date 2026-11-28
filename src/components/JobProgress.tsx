@@ -109,7 +109,9 @@ export function JobProgress({ jobId, onSettled, onJobChange }: JobProgressProps)
                         ? "Dialogue timing"
                         : job.type === "mix_render"
                           ? "Mix rendering"
-                          : "Import & inspect"}
+                          : job.type === "lipsync"
+                            ? "Lip sync"
+                            : "Import & inspect"}
           </strong>
           <span className="job-type">{job.type}</span>
         </div>

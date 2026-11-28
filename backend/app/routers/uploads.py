@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..services import job_queue
 from ..database import get_db
 from ..models import Project, UploadSession, Video
 from ..schemas import JobOut, UploadAccepted, UploadSessionCreate, UploadSessionOut
@@ -77,7 +78,7 @@ def _attach_video(
     db.commit()
     db.refresh(video)
     db.refresh(job)
-    background.add_task(run_import_job, job.id, video.id, metadata)
+    job_queue.submit(background, job, metadata=metadata)
     return UploadAccepted(video=video_to_out(video), job=JobOut.model_validate(job))
 
 

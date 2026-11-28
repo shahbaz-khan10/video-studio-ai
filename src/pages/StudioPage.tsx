@@ -4,7 +4,9 @@ import { AudioPreviewPanel } from "../components/AudioPreviewPanel";
 import { CharacterPanel } from "../components/CharacterPanel";
 import { DubAudioPanel } from "../components/DubAudioPanel";
 import { DubTimingPanel } from "../components/DubTimingPanel";
+import { LipSyncPanel } from "../components/LipSyncPanel";
 import { MixStudioPanel } from "../components/MixStudioPanel";
+import { TimelineEditor } from "../components/TimelineEditor";
 import { JobProgress } from "../components/JobProgress";
 import { StatusBadge } from "../components/States";
 import { TranscriptPanel } from "../components/TranscriptPanel";
@@ -22,13 +24,7 @@ interface StudioPageProps {
   maxUploadMb: number;
 }
 
-const TRACKS = [
-  { name: "Original English", detail: "Source audio", kind: "source" },
-  { name: "Urdu Dub", detail: "No generated audio", kind: "planned" },
-  { name: "Hindi Dub", detail: "No generated audio", kind: "planned" },
-  { name: "Background Music", detail: "No separated stem", kind: "planned" },
-  { name: "Sound Effects", detail: "No separated stem", kind: "planned" },
-] as const;
+
 
 export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
@@ -63,18 +59,7 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
     jobs.data?.find((item) => item.video_id === selectedVideo?.id) ??
     jobs.data?.[0] ??
     null;
-  const durationMs = selectedVideo?.duration_ms ?? 0;
-  const rulerMarks = durationMs > 0
-    ? [0, 0.25, 0.5, 0.75, 1].map((fraction) => ({
-        fraction,
-        label: formatDuration(Math.round(durationMs * fraction)),
-      }))
-    : [
-        { fraction: 0, label: "0:00" },
-        { fraction: 1, label: "—" },
-      ];
-
-  return (
+return (
     <div className="page studio-page">
       <div className="breadcrumb">
         <a href="#/projects">Projects</a>
@@ -291,41 +276,32 @@ export function StudioPage({ projectId, maxUploadMb }: StudioPageProps) {
               <MixStudioPanel key={selectedVideo!.id} videoId={selectedVideo!.id} videoRef={videoRef} onJobStarted={(jobId) => setActiveJobId(jobId)} />
             </section>
 
+            <section className="panel studio-lipsync">
+              <div className="panel-heading">
+                <div>
+                  <h2>Lip Sync Studio</h2>
+                  <p>AI mouth movement for the speaking character, driven by the Urdu or Hindi dub. Review every result.</p>
+                </div>
+                <span className="chip">AI lip sync · review</span>
+              </div>
+              <LipSyncPanel key={selectedVideo!.id} videoId={selectedVideo!.id} videoRef={videoRef} onJobStarted={(jobId) => setActiveJobId(jobId)} />
+            </section>
+
             <section className="panel studio-timeline">
               <div className="panel-heading">
                 <div>
-                  <h2>Timeline Editor</h2>
-                  <p>Static track layout using the real source duration.</p>
+                  <h2>Professional Timeline Editor</h2>
+                  <p>Multitrack dubbing timeline: video, original dialogue, Urdu/Hindi dubs, music, SFX, ambience, external audio, lip sync.</p>
                 </div>
-                <span className="chip chip-planned">Editing · planned</span>
+                <span className="chip">Phase 14</span>
               </div>
-              <p className="planned-note">
-                Playback, clipping, mixing and export are not enabled in this phase. Lanes show the intended track
-                structure only; generated stems are previewed in the Audio Stems panel above.
-              </p>
-              <div className="timeline-scroll">
-                <div className="timeline-ruler" aria-label="Timeline ruler">
-                  {rulerMarks.map((mark) => (
-                    <span key={`${mark.fraction}-${mark.label}`} style={{ left: `${mark.fraction * 100}%` }}>
-                      {mark.label}
-                    </span>
-                  ))}
-                </div>
-                <div className="track-lanes">
-                  {TRACKS.map((track) => (
-                    <div className="track-lane" key={track.name}>
-                      <div className="track-label">
-                        <strong>{track.name}</strong>
-                        <small>{track.kind === "source" && selectedVideo?.audio_codec ? `Source audio · ${selectedVideo.audio_codec}` : track.detail}</small>
-                      </div>
-                      <div className={`track-wave track-wave-${track.kind}`} aria-hidden="true" />
-                      <span className={track.kind === "source" ? "chip" : "chip chip-planned"}>
-                        {track.kind === "source" ? "present" : "planned"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <TimelineEditor
+                key={selectedVideo!.id}
+                projectId={projectId}
+                videoId={selectedVideo!.id}
+                videoRef={videoRef}
+                videoDurationMs={selectedVideo!.duration_ms}
+              />
             </section>
           </div>
         </>

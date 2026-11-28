@@ -373,4 +373,4 @@ def test_cancel_and_retry_render(client, studio):
 
 def test_capability_flag(client, studio):
     caps = client.get("/api/v1/info").json()["capabilities"]
-    assert caps["mixing_studio"] is True and caps["lip_sync"] is False
+    assert caps["mixing_studio"] is True and caps["lip_sync"] is True  # enabled by Phase 13

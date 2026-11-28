@@ -27,8 +27,8 @@ def test_info_reports_phase5_mixer_capabilities(client):
         "project_mix_settings",
     ):
         assert body["capabilities"][flag] is True
-    for flag in ("lip_sync", "timeline_editor"):
-        assert body["capabilities"][flag] is False
+    # Later phases (voice generation, lip sync, timeline editor) are enabled by
+    # their own phases and checked in those phases' tests.
 
 
 def test_default_mixer_settings_cover_six_tracks(client):

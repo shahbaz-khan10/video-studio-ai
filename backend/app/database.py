@@ -12,6 +12,16 @@ class Base(DeclarativeBase):
 
 _JOB_COLUMNS = {
     "options_json": "JSON NOT NULL DEFAULT '{}'",
+    # Phase 15 queue lease
+    "worker_id": "VARCHAR(64)",
+    "lease_expires_at": "DATETIME",
+    "attempts": "INTEGER NOT NULL DEFAULT 0",
+}
+
+_LIPSYNC_COLUMNS = {
+    "needs_regeneration": "BOOLEAN NOT NULL DEFAULT 0",
+    "regeneration_reason": "VARCHAR(255)",
+    "dubbed_fingerprint": "VARCHAR(64)",
 }
 
 _VIDEO_COLUMNS = {
@@ -72,10 +82,26 @@ def _migrate_sqlite() -> None:
         for name, definition in _JOB_COLUMNS.items():
             if name not in job_columns:
                 connection.exec_driver_sql(f"ALTER TABLE processing_jobs ADD COLUMN {name} {definition}")
+        # Phase 14 - lip-sync invalidation columns on Phase 13 table
+        try:
+            lipsync_columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(lipsync_results)")}
+        except Exception:
+            lipsync_columns = set()
+        for name, definition in _LIPSYNC_COLUMNS.items():
+            if lipsync_columns and name not in lipsync_columns:
+                connection.exec_driver_sql(f"ALTER TABLE lipsync_results ADD COLUMN {name} {definition}")
 
 
 def init_db() -> None:
-    from . import models
+    from . import (  # noqa: F401
+        models,
+        models_lipsync,
+        models_workers,
+        models_mix,
+        models_timeline,
+        models_timing,
+        models_tts,
+    )
 
     Base.metadata.create_all(bind=engine)
     if engine.dialect.name == "sqlite":

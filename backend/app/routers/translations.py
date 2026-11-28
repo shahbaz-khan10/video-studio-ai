@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from ..services import job_queue
 from ..database import get_db
 from ..models import (
     Character,
@@ -230,7 +231,7 @@ def translate_all(
         "segment_ids": payload.segment_ids or None,
     }
     job = service.create_translation_job(db, video, options)
-    background.add_task(service.run_translation_job, job.id, video.id, job.options_json)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 

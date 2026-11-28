@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..services import job_queue
 from ..database import get_db
 from ..models import (
     Character,
@@ -222,7 +223,7 @@ def detect_characters(
         "max_candidates": payload.max_candidates,
     }
     job = create_character_job(db, video.project_id, video.id, options)
-    background.add_task(run_character_job, job.id, video.id, job.options_json)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 

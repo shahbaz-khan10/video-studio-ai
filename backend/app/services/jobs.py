@@ -1376,6 +1376,22 @@ def prepare_retry_job(db: Session, job_id: str) -> tuple[ProcessingJob, str, dic
         context = job.options_json or {}
         retry = create_render_job(db, video, context.get("target", "ur"), context.get("format", "wav"))
         return retry, video.id, retry.options_json
+    if job.type == "timeline_export":
+        from ..models_timeline import TimelineProject
+        from .timeline import create_export_job
+
+        options = dict(job.options_json or {})
+        timeline = db.get(TimelineProject, options.get("_target_id") or "")
+        if timeline is None:
+            raise AppError(409, "TIMELINE_MISSING", "The timeline for this export no longer exists.")
+        retry = create_export_job(db, timeline, video, options)
+        return retry, video.id, options
+    if job.type == "lipsync":
+        from .lipsync import create_lipsync_job
+
+        context = {**(job.options_json or {}), "resume_from_job_id": job.id}
+        retry = create_lipsync_job(db, video, context)
+        return retry, video.id, context
     client_metadata = (video.metadata_json or {}).get("browser") or {}
     retry = create_import_job(db, video.project_id, video.id, job.type)
     return retry, video.id, client_metadata

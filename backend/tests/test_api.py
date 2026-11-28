@@ -31,7 +31,7 @@ def test_health_and_info(client):
     body = info.json()
     assert body["ai_stages"] == "partial"
     assert body["capabilities"]["video_upload"] is True
-    assert body["capabilities"]["lip_sync"] is False
+    assert body["capabilities"]["lip_sync"] is True  # Phase 13
     assert body["max_upload_mb"] == 16
     assert body["upload_chunk_mb"] == 1
     assert body["capabilities"]["resumable_upload"] is True

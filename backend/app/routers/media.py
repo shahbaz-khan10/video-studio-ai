@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..services import job_queue
 from ..database import get_db
 from ..models import MediaAsset, ProcessingJob, Video
 from ..schemas import AudioBundleOut, AudioStemOut, JobOut, MediaAssetOut
@@ -185,7 +186,7 @@ def reprobe_video(
         raise HTTPException(status_code=410, detail={"code": "FILE_MISSING", "message": "Stored video file is missing"})
     job = create_import_job(db, video.project_id, video.id, job_type="media_reprobe")
     client_metadata = (video.metadata_json or {}).get("browser") or {}
-    background.add_task(run_import_job, job.id, video.id, client_metadata)
+    job_queue.submit(background, job, metadata=client_metadata)
     return JobOut.model_validate(job)
 
 
@@ -241,7 +242,7 @@ def separate_video_audio(
             },
         )
     job = create_audio_job(db, video.project_id, video.id)
-    background.add_task(run_audio_separation_job, job.id, video.id)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 

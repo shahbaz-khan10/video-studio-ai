@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import models_tts  # noqa: F401 — registers the Phase 10 table before init_db
+from ..services import job_queue
 from ..database import get_db
 from ..models import Character, TranscriptSegment, Video
 from ..models_tts import DubAudioTake
@@ -115,7 +116,7 @@ def generate_batch(
     if not chosen:
         raise AppError(409, "NOTHING_TO_GENERATE", "No lines need audio with these settings (approved and up-to-date lines are skipped).")
     job = service.create_dub_job(db, video, options)
-    background.add_task(service.run_dub_job, job.id, video.id, job.options_json)
+    job_queue.submit(background, job)
     return JobOut.model_validate(job)
 
 
